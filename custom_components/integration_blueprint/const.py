@@ -1,8 +1,17 @@
-"""Constants for integration_blueprint."""
+"""Constants for the Class Charts integration."""
 
-from logging import Logger, getLogger
+DOMAIN = "classcharts"
 
-LOGGER: Logger = getLogger(__package__)
+# API Endpoints
+BASE_URL = "https://www.classcharts.com/api/v2"
+LOGIN_URL = f"{BASE_URL}/parent/login"
+PUPILS_URL = f"{BASE_URL}/parent/pupils"
+TIMETABLE_URL = f"{BASE_URL}/parent/timetable"
 
-DOMAIN = "integration_blueprint"
-ATTRIBUTION = "Data provided by http://jsonplaceholder.typicode.com/"
+# Configuration Keys
+CONF_PUPIL_ID = "pupil_id"
+
+# Attributes
+ATTR_TEACHER = "teacher"
+ATTR_ROOM = "room"
+ATTR_SUBJECT = "subject"
