@@ -1,12 +1,14 @@
 {
-  "domain": "integration_blueprint",
-  "name": "Integration blueprint",
-  "codeowners": [
-    "@ludeeus"
-  ],
-  "config_flow": true,
-  "documentation": "https://github.com/ludeeus/integration_blueprint",
+  "domain": "classcharts",
+  "name": "Class Charts Timetable",
+  "version": "1.0.0",
+  "documentation": "https://github.com/yourusername/your-repo",
+  "issue_tracker": "https://github.com/yourusername/your-repo/issues",
+  "codeowners": ["@your_github_username"],
+  "integration_type": "service",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/ludeeus/integration_blueprint/issues",
-  "version": "0.1.0"
+  "requirements": [
+    "requests>=2.31.0"
+  ],
+  "config_flow": true
 }
