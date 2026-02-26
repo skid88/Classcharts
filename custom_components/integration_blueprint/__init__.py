@@ -1,78 +1,69 @@
-"""
-Custom integration to integrate integration_blueprint with Home Assistant.
-
-For more details about this integration, please refer to
-https://github.com/ludeeus/integration_blueprint
-"""
-
-from __future__ import annotations
-
+import logging
 from datetime import timedelta
-from typing import TYPE_CHECKING
+from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.loader import async_get_loaded_integration
+from .const import DOMAIN, LOGIN_URL, TIMETABLE_URL
+import requests
+import datetime
 
-from .api import IntegrationBlueprintApiClient
-from .const import DOMAIN, LOGGER
-from .coordinator import BlueprintDataUpdateCoordinator
-from .data import IntegrationBlueprintData
+_LOGGER = logging.getLogger(__name__)
 
-if TYPE_CHECKING:
-    from homeassistant.core import HomeAssistant
-
-    from .data import IntegrationBlueprintConfigEntry
-
-PLATFORMS: list[Platform] = [
-    Platform.SENSOR,
-    Platform.BINARY_SENSOR,
-    Platform.SWITCH,
-]
-
-
-# https://developers.home-assistant.io/docs/config_entries_index/#setting-up-an-entry
-async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: IntegrationBlueprintConfigEntry,
-) -> bool:
-    """Set up this integration using UI."""
-    coordinator = BlueprintDataUpdateCoordinator(
-        hass=hass,
-        logger=LOGGER,
-        name=DOMAIN,
-        update_interval=timedelta(hours=1),
-    )
-    entry.runtime_data = IntegrationBlueprintData(
-        client=IntegrationBlueprintApiClient(
-            username=entry.data[CONF_USERNAME],
-            password=entry.data[CONF_PASSWORD],
-            session=async_get_clientsession(hass),
-        ),
-        integration=async_get_loaded_integration(hass, entry.domain),
-        coordinator=coordinator,
-    )
-
-    # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up Class Charts from a config entry."""
+    
+    # Create the coordinator
+    coordinator = ClassChartsCoordinator(hass, entry)
+    
+    # Fetch initial data so we have something on startup
     await coordinator.async_config_entry_first_refresh()
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+    # Store coordinator for platforms (calendar.py) to use
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][entry.entry_id] = coordinator
 
+    # Forward the setup to the calendar platform
+    await hass.config_entries.async_forward_entry_setups(entry, ["calendar"])
     return True
 
+class ClassChartsCoordinator(DataUpdateCoordinator):
+    """Class to manage fetching Class Charts data once a day."""
 
-async def async_unload_entry(
-    hass: HomeAssistant,
-    entry: IntegrationBlueprintConfigEntry,
-) -> bool:
-    """Handle removal of an entry."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    def __init__(self, hass, entry):
+        """Initialize."""
+        self.entry = entry
+        # Update every 24 hours
+        super().__init__(
+            hass, 
+            _LOGGER, 
+            name=DOMAIN, 
+            update_interval=timedelta(hours=24)
+        )
 
+    async def _async_update_data(self):
+        """Fetch data from API."""
+        try:
+            # 1. Login Logic
+            session = requests.post(LOGIN_URL, data={
+                "email": self.entry.data["email"],
+                "password": self.entry.data["password"],
+                "remember": "true"
+            })
+            token = session.json().get("token")
+            pupil_id = self.entry.data["pupil_id"]
 
-async def async_reload_entry(
-    hass: HomeAssistant,
-    entry: IntegrationBlueprintConfigEntry,
-) -> None:
-    """Reload config entry."""
-    await hass.config_entries.async_reload(entry.entry_id)
+            # 2. Multi-day Fetch Logic
+            full_schedule = {}
+            for i in range(7):  # Get a full week
+                date = (datetime.date.today() + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
+                resp = requests.get(
+                    f"{TIMETABLE_URL}/{pupil_id}?date={date}",
+                    headers={"Authorization": f"Bearer {token}"}
+                )
+                full_schedule[date] = resp.json().get("data", [])
+
+            return full_schedule
+
+        except Exception as err:
+            raise UpdateFailed(f"Error communicating with API: {err}")
