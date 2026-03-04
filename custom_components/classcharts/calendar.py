@@ -84,5 +84,5 @@ class ClassChartsCalendar(CalendarEntity):
     def event(self):
         """Return the next upcoming event."""
         all_events = sorted(self._get_events_from_data(), key=lambda x: x.start)
-        now = datetime.now()
+        now = dt_util.now()
         return next((e for e in all_events if e.end > now), None)
