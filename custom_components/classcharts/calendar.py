@@ -31,46 +31,44 @@ class ClassChartsCalendar(CalendarEntity):
         return self.coordinator.last_update_success
 
     def _get_events_from_data(self):
-        """Helper to parse the coordinator data."""
         events = []
         data = self.coordinator.data
         
-        # 1. Add a Test Event so you can see if the calendar entity is alive
+        # FIX: Use dt_util.now() so the test event has a timezone
         events.append(
             CalendarEvent(
                 summary="API Connection Test",
-                start=datetime.now(),
-                end=datetime.now() + timedelta(hours=1),
-                description="If you see this, the calendar works! Check logs for API data."
+                start=dt_util.now(),
+                end=dt_util.now() + timedelta(hours=1),
+                description="If you see this, the calendar works!"
             )
         )
 
         if not data:
-            _LOGGER.debug("No data found in coordinator")
             return events
 
-        # 2. Loop through the actual data
         for date_str, lessons in data.items():
             for lesson in lessons:
                 try:
-                    # Handle HH:MM vs HH:MM:SS
                     start_t = lesson['start_time'] if len(lesson['start_time'].split(':')) == 3 else f"{lesson['start_time']}:00"
                     end_t = lesson['end_time'] if len(lesson['end_time'].split(':')) == 3 else f"{lesson['end_time']}:00"
 
-                    start_dt = datetime.strptime(f"{date_str} {start_t}", "%Y-%m-%d %H:%M:%S")
-                    end_dt = datetime.strptime(f"{date_str} {end_t}", "%Y-%m-%d %H:%M:%S")
+                    # Parse the string into a naive datetime first
+                    naive_start = datetime.strptime(f"{date_str} {start_t}", "%Y-%m-%d %H:%M:%S")
+                    naive_end = datetime.strptime(f"{date_str} {end_t}", "%Y-%m-%d %H:%M:%S")
 
+                    # FIX: Use dt_util.as_local to add your Home Assistant's timezone
                     events.append(
                         CalendarEvent(
                             summary=lesson.get("subject_name", "Lesson"),
-                            start=start_dt,
-                            end=end_dt,
+                            start=dt_util.as_local(naive_start),
+                            end=dt_util.as_local(naive_end),
                             location=lesson.get("room_name", ""),
                             description=f"Teacher: {lesson.get('teacher_name', 'Unknown')}",
                         )
                     )
                 except Exception as err:
-                    _LOGGER.error("Failed to parse lesson on %s: %s", date_str, err)
+                    _LOGGER.error("Failed to parse lesson: %s", err)
         
         return events
 
