@@ -1,58 +1,71 @@
-from datetime import datetime, timedelta
+import logging
+from datetime import datetime
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
-from .const import DOMAIN
+from .const import DOMAIN, CONF_PUPIL_ID
+
+_LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """Set up the Class Charts calendar platform."""
-    # We retrieve the 'coordinator' which holds our logged-in session and data
     coordinator = hass.data[DOMAIN][config_entry.entry_id]
-    async_add_entities([ClassChartsCalendar(coordinator)])
+    
+    # We pass the pupil_id from the config entry directly
+    pupil_id = config_entry.data.get(CONF_PUPIL_ID)
+    
+    _LOGGER.debug("Setting up Class Charts calendar for pupil: %s", pupil_id)
+    async_add_entities([ClassChartsCalendar(coordinator, pupil_id)])
 
 class ClassChartsCalendar(CalendarEntity):
-    """Representation of a Class Charts Timetable as a calendar."""
+    """Representation of a Class Charts Timetable."""
 
-    def __init__(self, coordinator):
+    def __init__(self, coordinator, pupil_id):
         self.coordinator = coordinator
-        self._attr_name = "Class Charts Timetable"
-        self._attr_unique_id = f"{coordinator.pupil_id}_timetable"
+        self._pupil_id = pupil_id
+        self._attr_name = f"Class Charts ({pupil_id})"
+        self._attr_unique_id = f"{pupil_id}_timetable"
 
     @property
-    def event(self) -> CalendarEvent | None:
-        """Return the next upcoming event."""
-        # This shows the 'active' lesson on your dashboard
-        now = datetime.now()
-        events = self._get_all_events()
-        upcoming = [e for e in events if e.end > now]
-        return upcoming[0] if upcoming else None
+    def available(self):
+        """Return if entity is available."""
+        return self.coordinator.last_update_success
 
-    def _get_all_events(self):
-        """Helper to transform raw API data into HA CalendarEvents."""
+    def _get_events_from_data(self):
+        """Helper to parse the coordinator data."""
         events = []
-        # 'data' here is the multi-day dictionary we built in the previous step
-        data = self.coordinator.data 
+        data = self.coordinator.data
+        if not data:
+            return events
 
         for date_str, lessons in data.items():
             for lesson in lessons:
-                # Class Charts uses HH:MM:SS, HA needs a datetime object
-                start_dt = datetime.strptime(f"{date_str} {lesson['start_time']}", "%Y-%m-%d %H:%M:%S")
-                end_dt = datetime.strptime(f"{date_str} {lesson['end_time']}", "%Y-%m-%d %H:%M:%S")
+                try:
+                    start_dt = datetime.strptime(f"{date_str} {lesson['start_time']}", "%Y-%m-%d %H:%M:%S")
+                    end_dt = datetime.strptime(f"{date_str} {lesson['end_time']}", "%Y-%m-%d %H:%M:%S")
 
-                events.append(
-                    CalendarEvent(
-                        summary=lesson.get("subject_name", "Lesson"),
-                        start=start_dt,
-                        end=end_dt,
-                        location=lesson.get("room_name"),
-                        description=f"Teacher: {lesson.get('teacher_name')}",
+                    events.append(
+                        CalendarEvent(
+                            summary=lesson.get("subject_name", "Lesson"),
+                            start=start_dt,
+                            end=end_dt,
+                            location=lesson.get("room_name"),
+                            description=f"Teacher: {lesson.get('teacher_name')}",
+                        )
                     )
-                )
-        return sorted(events, key=lambda x: x.start)
+                except (KeyError, ValueError) as err:
+                    _LOGGER.warning("Error parsing lesson on %s: %s", date_str, err)
+        return events
 
-    async def async_get_events(self, hass, start_date, end_date) -> list[CalendarEvent]:
-        """Return calendar events within a specific datetime range."""
-        all_events = self._get_all_events()
-        # Filter events so we only show what the calendar card is asking for
+    async def async_get_events(self, hass, start_date, end_date):
+        """Return calendar events."""
+        events = self._get_events_from_data()
         return [
-            event for event in all_events 
+            event for event in events 
             if event.start >= start_date and event.end <= end_date
         ]
+
+    @property
+    def event(self):
+        """Return the next upcoming event."""
+        all_events = sorted(self._get_events_from_data(), key=lambda x: x.start)
+        now = datetime.now()
+        return next((e for e in all_events if e.end > now), None)
