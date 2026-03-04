@@ -1,46 +1,39 @@
-# Notice
+# Class Charts Timetable for Home Assistant
 
-The component and platforms in this repository are not meant to be used by a
-user, but as a "blueprint" that custom component developers can build
-upon, to make more awesome stuff.
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 
-HAVE FUN! 😎
+This integration brings your child's Class Charts timetable into Home Assistant as a calendar entity.
 
-## Why?
+## Features
+- **Daily Sync:** Fetches a 7-day rolling timetable once every 24 hours.
+- **Calendar Entity:** View lessons, teachers, and room numbers directly on your dashboard.
+- **Automation Ready:** Trigger morning reminders based on the first lesson of the day.
 
-This is simple, by having custom_components look (README + structure) the same
-it is easier for developers to help each other and for users to start using them.
+## Installation
 
-If you are a developer and you want to add things to this "blueprint" that you think more
-developers will have use for, please open a PR to add it :)
+### Method 1: HACS (Recommended)
+1. Open **HACS** in Home Assistant.
+2. Click the three dots in the top right and select **Custom repositories**.
+3. Paste `https://github.com/skid88/Classcharts` and select **Integration** as the category.
+4. Click **Add**, then click **Download** on the new Class Charts card.
+5. Restart Home Assistant.
 
-## What?
+### Method 2: Manual
+1. Download the `custom_components/classcharts` folder.
+2. Copy it into your Home Assistant `/config/custom_components/` directory.
+3. Restart Home Assistant.
 
-This repository contains multiple files, here is a overview:
+## Configuration
+1. Go to **Settings > Devices & Services**.
+2. Click **Add Integration** and search for **Class Charts Timetable**.
+3. Enter your Parent account details:
+   - **Email:** Your Class Charts login email.
+   - **Password:** Your Class Charts login password.
+   - **Pupil ID:** See below on how to find this.
 
-File | Purpose | Documentation
--- | -- | --
-`.devcontainer.json` | Used for development/testing with Visual Studio Code. | [Documentation](https://code.visualstudio.com/docs/remote/containers)
-`.github/ISSUE_TEMPLATE/*.yml` | Templates for the issue tracker | [Documentation](https://help.github.com/en/github/building-a-strong-community/configuring-issue-templates-for-your-repository)
-`custom_components/integration_blueprint/*` | Integration files, this is where everything happens. | [Documentation](https://developers.home-assistant.io/docs/creating_component_index)
-`CONTRIBUTING.md` | Guidelines on how to contribute. | [Documentation](https://help.github.com/en/github/building-a-strong-community/setting-guidelines-for-repository-contributors)
-`LICENSE` | The license file for the project. | [Documentation](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/licensing-a-repository)
-`README.md` | The file you are reading now, should contain info about the integration, installation and configuration instructions. | [Documentation](https://help.github.com/en/github/writing-on-github/basic-writing-and-formatting-syntax)
-`requirements.txt` | Python packages used for development/lint/testing this integration. | [Documentation](https://pip.pypa.io/en/stable/user_guide/#requirements-files)
-
-## How?
-
-1. Create a new repository in GitHub, using this repository as a template by clicking the "Use this template" button in the GitHub UI.
-1. Open your new repository in Visual Studio Code devcontainer (Preferably with the "`Dev Containers: Clone Repository in Named Container Volume...`" option).
-1. Rename all instances of the `integration_blueprint` to `custom_components/<your_integration_domain>` (e.g. `custom_components/awesome_integration`).
-1. Rename all instances of the `Integration Blueprint` to `<Your Integration Name>` (e.g. `Awesome Integration`).
-1. Run the `scripts/develop` to start HA and test out your new integration.
-
-## Next steps
-
-These are some next steps you may want to look into:
-- Add tests to your integration, [`pytest-homeassistant-custom-component`](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component) can help you get started.
-- Add brand images (logo/icon) to https://github.com/home-assistant/brands.
-- Create your first release.
-- Share your integration on the [Home Assistant Forum](https://community.home-assistant.io/).
-- Submit your integration to [HACS](https://hacs.xyz/docs/publish/start).
+## How to find your Pupil ID
+The Pupil ID is a unique number for your child. It is **not** the access code provided by the school.
+1. Log in to the [Class Charts Parent Website](https://www.classcharts.com/parent/login).
+2. Select your child.
+3. Look at the URL in your browser. It will look like this: `.../parent/pupil/1234567`.
+4. The number at the end (`1234567`) is your **Pupil ID**.
