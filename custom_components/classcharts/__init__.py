@@ -26,49 +26,59 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 def sync_get_classcharts_data(email, password, pupil_id):
-    """Fetch data from Class Charts with improved token detection."""
+    """Fetch data using a Session to maintain login state."""
+    # Create a session to handle cookies/state
+    session = requests.Session()
+    
     try:
-        _LOGGER.debug("Attempting login for %s", email)
-        session_resp = requests.post(
+        # 1. Login
+        _LOGGER.debug("Attempting session login for %s", email)
+        login_resp = session.post(
             LOGIN_URL, 
             data={"email": email, "password": password, "remember": "true"},
             timeout=10
         )
-        session_resp.raise_for_status()
+        login_resp.raise_for_status()
         
-        json_resp = session_resp.json()
-        # This will check 'token', 'data', and 'access_token' automatically
-        token = json_resp.get("token") or json_resp.get("data") or json_resp.get("access_token")
+        json_resp = login_resp.json()
+        token = json_resp.get("data") or json_resp.get("token")
         
         if not token:
-            _LOGGER.error("Login successful but no token found. Keys found: %s", list(json_resp.keys()))
+            _LOGGER.error("No token found in login response")
             return {}
 
-        _LOGGER.debug("Login successful, token acquired.")
+        # Set the header on the session so it's used for every following request
+        session.headers.update({"Authorization": f"Bearer {token}"})
 
+        # 2. Fetch 7 days of lessons
         full_schedule = {}
         for i in range(7):
-            # Using a safer date calculation
             target_date = datetime.date.today() + datetime.timedelta(days=i)
             date_str = target_date.strftime("%Y-%m-%d")
             
-            _LOGGER.debug("Requesting timetable for: %s", date_str)
-            resp = requests.get(
+            _LOGGER.debug("Fetching date %s using session", date_str)
+            # Use 'session.get' instead of 'requests.get'
+            resp = session.get(
                 f"{TIMETABLE_URL}/{pupil_id}?date={date_str}",
-                headers={"Authorization": f"Bearer {token}"},
                 timeout=10
             )
             
-            if resp.status_code == 200:
-                day_data = resp.json()
-                # Some APIs return the list directly, some wrap it in 'data'
-                lessons = day_data.get("data") if isinstance(day_data.get("data"), list) else day_data
-                full_schedule[date_str] = lessons
-                _LOGGER.debug("Saved %s lessons for %s", len(lessons), date_str)
-            else:
-                _LOGGER.warning("Failed to get data for %s: %s", date_str, resp.status_code)
+            day_data = resp.json()
+            
+            # Check if this specific day failed due to a session timeout
+            if day_data.get("success") == 0:
+                _LOGGER.warning("API returned error for %s: %s", date_str, day_data.get("error"))
+                continue
+
+            full_schedule[date_str] = day_data.get("data", [])
             
         return full_schedule
+
+    except Exception as err:
+        _LOGGER.error("Class Charts Session Error: %s", err)
+        raise err
+    finally:
+        session.close()
 
     except Exception as err:
         _LOGGER.error("Class Charts Sync Error: %s", err)
