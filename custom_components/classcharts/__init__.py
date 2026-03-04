@@ -26,9 +26,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 def sync_get_classcharts_data(email, password, pupil_id):
-    """Fetch data from Class Charts."""
+    """Fetch data from Class Charts with improved token detection."""
     try:
-        # 1. Login
+        _LOGGER.debug("Attempting login for %s", email)
         session_resp = requests.post(
             LOGIN_URL, 
             data={"email": email, "password": password, "remember": "true"},
@@ -37,36 +37,41 @@ def sync_get_classcharts_data(email, password, pupil_id):
         session_resp.raise_for_status()
         
         json_resp = session_resp.json()
-        token = json_resp.get("data") or json_resp.get("token")
+        # This will check 'token', 'data', and 'access_token' automatically
+        token = json_resp.get("token") or json_resp.get("data") or json_resp.get("access_token")
         
         if not token:
-            _LOGGER.error("Login successful but no token found: %s", json_resp)
+            _LOGGER.error("Login successful but no token found. Keys found: %s", list(json_resp.keys()))
             return {}
 
-        # 2. Fetch 7 days of lessons
+        _LOGGER.debug("Login successful, token acquired.")
+
         full_schedule = {}
         for i in range(7):
-            date_str = (datetime.date.today() + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
+            # Using a safer date calculation
+            target_date = datetime.date.today() + datetime.timedelta(days=i)
+            date_str = target_date.strftime("%Y-%m-%d")
             
-            _LOGGER.debug("Fetching timetable for date: %s", date_str)
+            _LOGGER.debug("Requesting timetable for: %s", date_str)
             resp = requests.get(
                 f"{TIMETABLE_URL}/{pupil_id}?date={date_str}",
                 headers={"Authorization": f"Bearer {token}"},
                 timeout=10
             )
-            resp.raise_for_status()
             
-            # We call .json() once and save it to a variable
-            day_data = resp.json()
-            _LOGGER.debug("Raw data for %s: %s", date_str, day_data)
-            
-            # Extract the actual list of lessons
-            full_schedule[date_str] = day_data.get("data", [])
+            if resp.status_code == 200:
+                day_data = resp.json()
+                # Some APIs return the list directly, some wrap it in 'data'
+                lessons = day_data.get("data") if isinstance(day_data.get("data"), list) else day_data
+                full_schedule[date_str] = lessons
+                _LOGGER.debug("Saved %s lessons for %s", len(lessons), date_str)
+            else:
+                _LOGGER.warning("Failed to get data for %s: %s", date_str, resp.status_code)
             
         return full_schedule
 
     except Exception as err:
-        _LOGGER.error("Failed to fetch Class Charts data: %s", err)
+        _LOGGER.error("Class Charts Sync Error: %s", err)
         raise err
 
 class ClassChartsCoordinator(DataUpdateCoordinator):
