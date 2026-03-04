@@ -26,10 +26,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 def sync_get_classcharts_data(email, password, pupil_id):
-    """
-    This is a standard blocking function. 
-    It runs in a separate thread so it doesn't freeze Home Assistant.
-    """
+    """Fetch data from Class Charts."""
     try:
         # 1. Login
         session_resp = requests.post(
@@ -38,13 +35,15 @@ def sync_get_classcharts_data(email, password, pupil_id):
             timeout=10
         )
         session_resp.raise_for_status()
-        token = session_resp.json().get("token")
+        token = session_resp.json().get("data") # Check if token is in 'token' or 'data'
 
         # 2. Fetch 7 days of lessons
         full_schedule = {}
         for i in range(7):
             date_str = (datetime.date.today() + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
             
+            # This part must be INSIDE the for loop (indented)
+            _LOGGER.debug("Fetching timetable for date: %s", date_str)
             resp = requests.get(
                 f"{TIMETABLE_URL}/{pupil_id}?date={date_str}",
                 headers={"Authorization": f"Bearer {token}"},
