@@ -35,14 +35,19 @@ def sync_get_classcharts_data(email, password, pupil_id):
             timeout=10
         )
         session_resp.raise_for_status()
-        token = session_resp.json().get("data") # Check if token is in 'token' or 'data'
+        
+        json_resp = session_resp.json()
+        token = json_resp.get("data") or json_resp.get("token")
+        
+        if not token:
+            _LOGGER.error("Login successful but no token found: %s", json_resp)
+            return {}
 
         # 2. Fetch 7 days of lessons
         full_schedule = {}
         for i in range(7):
             date_str = (datetime.date.today() + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
             
-            # This part must be INSIDE the for loop (indented)
             _LOGGER.debug("Fetching timetable for date: %s", date_str)
             resp = requests.get(
                 f"{TIMETABLE_URL}/{pupil_id}?date={date_str}",
@@ -50,7 +55,13 @@ def sync_get_classcharts_data(email, password, pupil_id):
                 timeout=10
             )
             resp.raise_for_status()
-            full_schedule[date_str] = resp.json().get("data", [])
+            
+            # We call .json() once and save it to a variable
+            day_data = resp.json()
+            _LOGGER.debug("Raw data for %s: %s", date_str, day_data)
+            
+            # Extract the actual list of lessons
+            full_schedule[date_str] = day_data.get("data", [])
             
         return full_schedule
 
