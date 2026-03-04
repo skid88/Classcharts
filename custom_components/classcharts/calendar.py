@@ -36,23 +36,30 @@ class ClassChartsCalendar(CalendarEntity):
         if not data:
             return events
 
-        for date_str, lessons in data.items():
-            for lesson in lessons:
-                try:
-                    start_dt = datetime.strptime(f"{date_str} {lesson['start_time']}", "%Y-%m-%d %H:%M:%S")
-                    end_dt = datetime.strptime(f"{date_str} {lesson['end_time']}", "%Y-%m-%d %H:%M:%S")
+        # Inside calendar.py, update your loop to this:
 
-                    events.append(
-                        CalendarEvent(
-                            summary=lesson.get("subject_name", "Lesson"),
-                            start=start_dt,
-                            end=end_dt,
-                            location=lesson.get("room_name"),
-                            description=f"Teacher: {lesson.get('teacher_name')}",
-                        )
-                    )
-                except (KeyError, ValueError) as err:
-                    _LOGGER.warning("Error parsing lesson on %s: %s", date_str, err)
+for date_str, lessons in data.items():
+    for lesson in lessons:
+        try:
+            # Class Charts sometimes uses '09:00' and sometimes '09:00:00'
+            # This logic handles both:
+            start_t = lesson['start_time'] if len(lesson['start_time'].split(':')) == 3 else f"{lesson['start_time']}:00"
+            end_t = lesson['end_time'] if len(lesson['end_time'].split(':')) == 3 else f"{lesson['end_time']}:00"
+
+            start_dt = datetime.strptime(f"{date_str} {start_t}", "%Y-%m-%d %H:%M:%S")
+            end_dt = datetime.strptime(f"{date_str} {end_t}", "%Y-%m-%d %H:%M:%S")
+
+            events.append(
+                CalendarEvent(
+                    summary=lesson.get("subject_name", "Lesson"),
+                    start=start_dt,
+                    end=end_dt,
+                    location=lesson.get("room_name", ""),
+                    description=f"Teacher: {lesson.get('teacher_name', 'Unknown')}",
+                )
+            )
+        except Exception as err:
+            _LOGGER.error("Failed to parse lesson: %s", err)
         return events
 
     async def async_get_events(self, hass, start_date, end_date):
