@@ -31,44 +31,61 @@ class ClassChartsCalendar(CalendarEntity):
         return self.coordinator.last_update_success
 
     def _get_events_from_data(self):
+        """Helper to parse the coordinator data."""
         events = []
         data = self.coordinator.data
         
-        # FIX: Use dt_util.now() so the test event has a timezone
+        # Keep the Test Event for now so we know the entity is alive
         events.append(
             CalendarEvent(
                 summary="API Connection Test",
                 start=dt_util.now(),
                 end=dt_util.now() + timedelta(hours=1),
-                description="If you see this, the calendar works!"
+                description="If you see this, the calendar is working!"
             )
         )
 
-        if not data:
+        if not data or not isinstance(data, dict):
+            _LOGGER.debug("No valid dictionary data found in coordinator")
             return events
 
         for date_str, lessons in data.items():
+            # Ensure 'lessons' is actually a list we can loop through
+            if not isinstance(lessons, list):
+                _LOGGER.warning("Lessons for %s is not a list: %s", date_str, lessons)
+                continue
+
             for lesson in lessons:
+                # This check prevents the 'string indices' error
+                if not isinstance(lesson, dict):
+                    _LOGGER.warning("Expected dictionary for lesson, got %s", type(lesson))
+                    continue
+
                 try:
-                    start_t = lesson['start_time'] if len(lesson['start_time'].split(':')) == 3 else f"{lesson['start_time']}:00"
-                    end_t = lesson['end_time'] if len(lesson['end_time'].split(':')) == 3 else f"{lesson['end_time']}:00"
+                    # Defensive fetching of times
+                    st_raw = lesson.get('start_time')
+                    et_raw = lesson.get('end_time')
 
-                    # Parse the string into a naive datetime first
-                    naive_start = datetime.strptime(f"{date_str} {start_t}", "%Y-%m-%d %H:%M:%S")
-                    naive_end = datetime.strptime(f"{date_str} {end_t}", "%Y-%m-%d %H:%M:%S")
+                    if not st_raw or not et_raw:
+                        continue
 
-                    # FIX: Use dt_util.as_local to add your Home Assistant's timezone
+                    start_t = st_raw if len(st_raw.split(':')) == 3 else f"{st_raw}:00"
+                    end_t = et_raw if len(et_raw.split(':')) == 3 else f"{et_raw}:00"
+
+                    start_dt = datetime.strptime(f"{date_str} {start_t}", "%Y-%m-%d %H:%M:%S")
+                    end_dt = datetime.strptime(f"{date_str} {end_t}", "%Y-%m-%d %H:%M:%S")
+
                     events.append(
                         CalendarEvent(
-                            summary=lesson.get("subject_name", "Lesson"),
-                            start=dt_util.as_local(naive_start),
-                            end=dt_util.as_local(naive_end),
+                            summary=lesson.get("subject_name") or lesson.get("lesson_name") or "Lesson",
+                            start=dt_util.as_local(start_dt),
+                            end=dt_util.as_local(end_dt),
                             location=lesson.get("room_name", ""),
                             description=f"Teacher: {lesson.get('teacher_name', 'Unknown')}",
                         )
                     )
                 except Exception as err:
-                    _LOGGER.error("Failed to parse lesson: %s", err)
+                    _LOGGER.error("Internal parse error on %s: %s", date_str, err)
         
         return events
 
