@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta  # <-- Add timedelta here
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from .const import DOMAIN, CONF_PUPIL_ID
 
@@ -33,33 +33,44 @@ class ClassChartsCalendar(CalendarEntity):
         """Helper to parse the coordinator data."""
         events = []
         data = self.coordinator.data
+        
+        # 1. Add a Test Event so you can see if the calendar entity is alive
+        events.append(
+            CalendarEvent(
+                summary="API Connection Test",
+                start=datetime.now(),
+                end=datetime.now() + timedelta(hours=1),
+                description="If you see this, the calendar works! Check logs for API data."
+            )
+        )
+
         if not data:
+            _LOGGER.debug("No data found in coordinator")
             return events
 
-        # Inside calendar.py, update your loop to this:
+        # 2. Loop through the actual data
+        for date_str, lessons in data.items():
+            for lesson in lessons:
+                try:
+                    # Handle HH:MM vs HH:MM:SS
+                    start_t = lesson['start_time'] if len(lesson['start_time'].split(':')) == 3 else f"{lesson['start_time']}:00"
+                    end_t = lesson['end_time'] if len(lesson['end_time'].split(':')) == 3 else f"{lesson['end_time']}:00"
 
-for date_str, lessons in data.items():
-    for lesson in lessons:
-        try:
-            # Class Charts sometimes uses '09:00' and sometimes '09:00:00'
-            # This logic handles both:
-            start_t = lesson['start_time'] if len(lesson['start_time'].split(':')) == 3 else f"{lesson['start_time']}:00"
-            end_t = lesson['end_time'] if len(lesson['end_time'].split(':')) == 3 else f"{lesson['end_time']}:00"
+                    start_dt = datetime.strptime(f"{date_str} {start_t}", "%Y-%m-%d %H:%M:%S")
+                    end_dt = datetime.strptime(f"{date_str} {end_t}", "%Y-%m-%d %H:%M:%S")
 
-            start_dt = datetime.strptime(f"{date_str} {start_t}", "%Y-%m-%d %H:%M:%S")
-            end_dt = datetime.strptime(f"{date_str} {end_t}", "%Y-%m-%d %H:%M:%S")
-
-            events.append(
-                CalendarEvent(
-                    summary=lesson.get("subject_name", "Lesson"),
-                    start=start_dt,
-                    end=end_dt,
-                    location=lesson.get("room_name", ""),
-                    description=f"Teacher: {lesson.get('teacher_name', 'Unknown')}",
-                )
-            )
-        except Exception as err:
-            _LOGGER.error("Failed to parse lesson: %s", err)
+                    events.append(
+                        CalendarEvent(
+                            summary=lesson.get("subject_name", "Lesson"),
+                            start=start_dt,
+                            end=end_dt,
+                            location=lesson.get("room_name", ""),
+                            description=f"Teacher: {lesson.get('teacher_name', 'Unknown')}",
+                        )
+                    )
+                except Exception as err:
+                    _LOGGER.error("Failed to parse lesson on %s: %s", date_str, err)
+        
         return events
 
     async def async_get_events(self, hass, start_date, end_date):
