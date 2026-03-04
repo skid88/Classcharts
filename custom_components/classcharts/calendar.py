@@ -1,5 +1,6 @@
 import logging
-from datetime import datetime, timedelta  # <-- Add timedelta here
+from datetime import datetime, timedelta
+import homeassistant.util.dt as dt_util  # <--- Add this
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from .const import DOMAIN, CONF_PUPIL_ID
 
