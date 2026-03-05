@@ -72,8 +72,21 @@ class ClassChartsCalendar(CalendarEntity):
                     start_t = st_raw if len(st_raw.split(':')) == 3 else f"{st_raw}:00"
                     end_t = et_raw if len(et_raw.split(':')) == 3 else f"{et_raw}:00"
 
-                    start_dt = datetime.strptime(f"{date_str} {start_t}", "%Y-%m-%d %H:%M:%S")
-                    end_dt = datetime.strptime(f"{date_str} {end_t}", "%Y-%m-%d %H:%M:%S")
+                    try:
+                # Use fromisoformat to handle the 'T' and timezone offset
+                start_dt = datetime.datetime.fromisoformat(lesson.get("start_time"))
+                end_dt = datetime.datetime.fromisoformat(lesson.get("end_time"))
+            except (ValueError, TypeError) as err:
+                # Fallback: if the API sends just a time, combine it with the date
+                _LOGGER.warning("Time format mismatch, attempting fallback: %s", err)
+                try:
+                    start_str = f"{date_str} {lesson.get('start_time')}"
+                    end_str = f"{date_str} {lesson.get('end_time')}"
+                    start_dt = datetime.datetime.strptime(start_str, "%Y-%m-%d %H:%M:%S")
+                    end_dt = datetime.datetime.strptime(end_str, "%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    _LOGGER.error("Internal parse error on %s: %s", date_str, lesson.get("start_time"))
+                    continue
 
                     events.append(
                         CalendarEvent(
