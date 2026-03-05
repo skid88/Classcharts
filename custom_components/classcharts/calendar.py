@@ -32,41 +32,42 @@ class ClassChartsCalendar(CalendarEntity):
         """Helper to parse the coordinator data."""
         events = []
         data = self.coordinator.data
-
+        
         if not data or not isinstance(data, dict):
+            _LOGGER.debug("Calendar: No dictionary data found")
             return events
 
         for date_str, lessons in data.items():
+            # If lessons is not a list, skip this day
             if not isinstance(lessons, list):
                 continue
 
             for lesson in lessons:
+                # Ensure each lesson is a dictionary
                 if not isinstance(lesson, dict):
                     continue
 
                 try:
-                    # Fetch ISO strings directly
+                    # 1. Extract times
                     st_raw = lesson.get('start_time')
                     et_raw = lesson.get('end_time')
 
                     if not st_raw or not et_raw:
                         continue
 
-                    # 1. Primary Attempt: Parse ISO format 
+                    # 2. Convert to HA-native datetime objects
                     try:
                         start_dt = datetime.fromisoformat(st_raw)
                         end_dt = datetime.fromisoformat(et_raw)
                     except (ValueError, TypeError):
-                        # 2. Fallback: Parse legacy 'HH:MM:SS' if ISO fails
-                        _LOGGER.debug("Falling back to strptime for %s", date_str)
-                        start_str = f"{date_str} {st_raw}"
-                        end_str = f"{date_str} {et_raw}"
-                        start_dt = datetime.strptime(start_str, "%Y-%m-%d %H:%M:%S")
-                        end_dt = datetime.strptime(end_str, "%Y-%m-%d %H:%M:%S")
+                        # Fallback for HH:MM:SS format
+                        start_dt = datetime.strptime(f"{date_str} {st_raw}", "%Y-%m-%d %H:%M:%S")
+                        end_dt = datetime.strptime(f"{date_str} {et_raw}", "%Y-%m-%d %H:%M:%S")
 
+                    # 3. Create the Event
                     events.append(
                         CalendarEvent(
-                            summary=lesson.get("subject_name") or lesson.get("lesson_name") or "Lesson",
+                            summary=lesson.get("subject_name", "Lesson"),
                             start=dt_util.as_local(start_dt),
                             end=dt_util.as_local(end_dt),
                             location=lesson.get("room_name", ""),
@@ -74,7 +75,7 @@ class ClassChartsCalendar(CalendarEntity):
                         )
                     )
                 except Exception as err:
-                    _LOGGER.error("Failed to parse lesson on %s: %s", date_str, err)
+                    _LOGGER.error("Calendar parse error on %s: %s", date_str, err)
         
         return events
 
