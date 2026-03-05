@@ -21,7 +21,7 @@ class ClassChartsLessonSensor(CoordinatorEntity, SensorEntity):
 
     def __init__(self, coordinator, name, sensor_type):
         super().__init__(coordinator)
-        self._attr_name = f"Class Charts {name}"
+        self._attr_name = name
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{sensor_type}"
         self.sensor_type = sensor_type
 
