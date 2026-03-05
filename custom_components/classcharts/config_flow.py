@@ -19,11 +19,13 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
+            # Create the entry with the provided credentials
             return self.async_create_entry(
                 title=user_input[CONF_EMAIL], 
                 data=user_input
             )
 
+        # Initial Setup Form
         data_schema = vol.Schema({
             vol.Required(CONF_EMAIL): str,
             vol.Required(CONF_PASSWORD): str,
@@ -55,7 +57,7 @@ class ClassChartsOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        # Build the dynamic settings form using constants from const.py
+        # Build the dynamic settings form
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
