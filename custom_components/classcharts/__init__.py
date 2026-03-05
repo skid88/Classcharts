@@ -26,10 +26,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 def sync_get_classcharts_data(email, password, pupil_id):
-    """Fetch data using a Session to maintain login state."""
+    """Fetch data using a Session with enhanced headers."""
     session = requests.Session()
+    # 1. Pretend to be a real browser
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "application/json, text/plain, */*",
+    })
+    
     try:
-        # 1. Login
+        # 2. Login
+        _LOGGER.debug("Attempting session login for %s", email)
         login_resp = session.post(
             LOGIN_URL, 
             data={"email": email, "password": password, "remember": "true"},
@@ -41,33 +48,41 @@ def sync_get_classcharts_data(email, password, pupil_id):
         token = json_resp.get("data") or json_resp.get("token")
         
         if not token:
-            _LOGGER.error("No token found in login response")
+            _LOGGER.error("Login successful but no token found")
             return {}
 
-        session.headers.update({"Authorization": f"Bearer {token}"})
+        # 3. Add Token AND Pupil-ID to headers (some schools require this)
+        session.headers.update({
+            "Authorization": f"Bearer {token}",
+            "X-Pupil-Id": str(pupil_id)
+        })
 
-        # 2. Fetch 7 days of lessons
+        # 4. Fetch 7 days of lessons
         full_schedule = {}
         for i in range(7):
             target_date = datetime.date.today() + datetime.timedelta(days=i)
             date_str = target_date.strftime("%Y-%m-%d")
             
+            # Use the session to maintain cookies
             resp = session.get(
                 f"{TIMETABLE_URL}/{pupil_id}?date={date_str}",
-                timeout=10
+                timeout=15
             )
             
             day_data = resp.json()
-            if day_data.get("success") == 0:
-                _LOGGER.warning("API error for %s: %s", date_str, day_data.get("error"))
+            
+            # If we get an error, log it but keep going for other days
+            if day_data.get("success") == 0 or "error" in day_data:
+                _LOGGER.warning("Day %s failed: %s", date_str, day_data.get("error"))
                 continue
 
             full_schedule[date_str] = day_data.get("data", [])
+            _LOGGER.debug("Successfully fetched %s lessons for %s", len(full_schedule[date_str]), date_str)
             
         return full_schedule
 
     except Exception as err:
-        _LOGGER.error("Class Charts Sync Error: %s", err)
+        _LOGGER.error("Class Charts Session Error: %s", err)
         return {}
     finally:
         session.close()
