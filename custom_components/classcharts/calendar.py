@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timedelta
-import homeassistant.util.dt as dt_util  # <--- Add this
+import homeassistant.util.dt as dt_util
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from .const import DOMAIN, CONF_PUPIL_ID
 
@@ -9,8 +9,6 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """Set up the Class Charts calendar platform."""
     coordinator = hass.data[DOMAIN][config_entry.entry_id]
-    
-    # We pass the pupil_id from the config entry directly
     pupil_id = config_entry.data.get(CONF_PUPIL_ID)
     
     _LOGGER.debug("Setting up Class Charts calendar for pupil: %s", pupil_id)
@@ -34,59 +32,37 @@ class ClassChartsCalendar(CalendarEntity):
         """Helper to parse the coordinator data."""
         events = []
         data = self.coordinator.data
-        
-        # Keep the Test Event for now so we know the entity is alive
-        events.append(
-            CalendarEvent(
-                summary="API Connection Test",
-                start=dt_util.now(),
-                end=dt_util.now() + timedelta(hours=1),
-                description="If you see this, the calendar is working!"
-            )
-        )
 
         if not data or not isinstance(data, dict):
-            _LOGGER.debug("No valid dictionary data found in coordinator")
             return events
 
         for date_str, lessons in data.items():
-            # Ensure 'lessons' is actually a list we can loop through
             if not isinstance(lessons, list):
-                _LOGGER.warning("Lessons for %s is not a list: %s", date_str, lessons)
                 continue
 
             for lesson in lessons:
-                # This check prevents the 'string indices' error
                 if not isinstance(lesson, dict):
-                    _LOGGER.warning("Expected dictionary for lesson, got %s", type(lesson))
                     continue
 
                 try:
-                    # Defensive fetching of times
+                    # Fetch ISO strings directly: 2026-03-10T13:40:00+00:00
                     st_raw = lesson.get('start_time')
                     et_raw = lesson.get('end_time')
 
                     if not st_raw or not et_raw:
                         continue
 
-                    start_t = st_raw if len(st_raw.split(':')) == 3 else f"{st_raw}:00"
-                    end_t = et_raw if len(et_raw.split(':')) == 3 else f"{et_raw}:00"
-
+                    # 1. Primary Attempt: Parse ISO format (matches your logs)
                     try:
-                # Use fromisoformat to handle the 'T' and timezone offset
-                start_dt = datetime.datetime.fromisoformat(lesson.get("start_time"))
-                end_dt = datetime.datetime.fromisoformat(lesson.get("end_time"))
-            except (ValueError, TypeError) as err:
-                # Fallback: if the API sends just a time, combine it with the date
-                _LOGGER.warning("Time format mismatch, attempting fallback: %s", err)
-                try:
-                    start_str = f"{date_str} {lesson.get('start_time')}"
-                    end_str = f"{date_str} {lesson.get('end_time')}"
-                    start_dt = datetime.datetime.strptime(start_str, "%Y-%m-%d %H:%M:%S")
-                    end_dt = datetime.datetime.strptime(end_str, "%Y-%m-%d %H:%M:%S")
-                except Exception:
-                    _LOGGER.error("Internal parse error on %s: %s", date_str, lesson.get("start_time"))
-                    continue
+                        start_dt = datetime.fromisoformat(st_raw)
+                        end_dt = datetime.fromisoformat(et_raw)
+                    except (ValueError, TypeError):
+                        # 2. Fallback: Parse legacy 'HH:MM:SS' if ISO fails
+                        _LOGGER.debug("Falling back to strptime for %s", date_str)
+                        start_str = f"{date_str} {st_raw}"
+                        end_str = f"{date_str} {et_raw}"
+                        start_dt = datetime.strptime(start_str, "%Y-%m-%d %H:%M:%S")
+                        end_dt = datetime.strptime(end_str, "%Y-%m-%d %H:%M:%S")
 
                     events.append(
                         CalendarEvent(
@@ -98,12 +74,12 @@ class ClassChartsCalendar(CalendarEntity):
                         )
                     )
                 except Exception as err:
-                    _LOGGER.error("Internal parse error on %s: %s", date_str, err)
+                    _LOGGER.error("Failed to parse lesson on %s: %s", date_str, err)
         
         return events
 
     async def async_get_events(self, hass, start_date, end_date):
-        """Return calendar events."""
+        """Return calendar events within a specific window."""
         events = self._get_events_from_data()
         return [
             event for event in events 
