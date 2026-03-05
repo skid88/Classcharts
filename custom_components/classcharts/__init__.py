@@ -25,56 +25,52 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 def sync_get_classcharts_data(email, password, pupil_id):
-    """Fetch data with robust type checking for lists vs dicts."""
+    """Fetch data with a bulletproof 'safe_get' to prevent list attribute errors."""
     session = requests.Session()
     session.headers.update({"User-Agent": "Mozilla/5.0 HA-Integration"})
     
+    def safe_get(data, key, default=None):
+        """Helper to safely get a key whether data is a list or dict."""
+        if isinstance(data, dict):
+            return data.get(key, default)
+        return default
+
     try:
         # 1. Login
         login_resp = session.post(LOGIN_URL, data={"email": email, "password": password, "remember": "true"}, timeout=10)
         login_resp.raise_for_status()
-        login_data = login_resp.json()
+        login_json = login_resp.json()
 
-        # Extract token safely from dict
-        if isinstance(login_data, dict):
-            token = login_data.get("data") or login_data.get("token")
-        else:
-            _LOGGER.error("Login failed: Expected dict but got %s", type(login_data))
-            return {}
-
+        # Safely extract token
+        token = safe_get(login_json, "data") or safe_get(login_json, "token")
+        
         if not token:
-            _LOGGER.error("Login failed: No token found in response")
+            _LOGGER.error("Login failed: No token found. Response type: %s", type(login_json))
             return {}
 
         full_schedule = {}
         for i in range(7):
             date_str = (datetime.date.today() + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
 
-            # --- Ping to keep session alive ---
+            # 2. Ping Revalidation
             ping_resp = session.post(PING_URL, headers={"Authorization": f"Basic {token}"}, data={"include_data": "true"}, timeout=10)
             if ping_resp.status_code == 200:
                 ping_json = ping_resp.json()
-                if isinstance(ping_json, dict):
-                    token = ping_json.get("meta", {}).get("session_id") or token
+                # Safely drill down into meta -> session_id
+                meta = safe_get(ping_json, "meta", {})
+                token = safe_get(meta, "session_id") or token
 
-            # --- Fetch Timetable ---
+            # 3. Timetable Fetch
             resp = session.get(f"{TIMETABLE_URL}/{pupil_id}?date={date_str}", headers={"Authorization": f"Basic {token}"}, timeout=10)
             day_data = resp.json()
 
-            # --- THE FIX: Handle both List and Dict responses ---
+            # 4. Extract Lessons Safely
             if isinstance(day_data, list):
-                # The API returned the lessons directly as a list
                 full_schedule[date_str] = day_data
-                _LOGGER.debug("Loaded %s lessons from LIST for %s", len(day_data), date_str)
-            
-            elif isinstance(day_data, dict):
-                # The API returned a dict, try to find the list inside 'data'
-                lessons = day_data.get("data", [])
-                full_schedule[date_str] = lessons if isinstance(lessons, list) else []
-                _LOGGER.debug("Loaded %s lessons from DICT for %s", len(full_schedule[date_str]), date_str)
-            
             else:
-                _LOGGER.warning("Unexpected data type for %s: %s", date_str, type(day_data))
+                full_schedule[date_str] = safe_get(day_data, "data", [])
+            
+            _LOGGER.debug("Day %s: Found %s lessons", date_str, len(full_schedule[date_str]))
             
         return full_schedule
 
