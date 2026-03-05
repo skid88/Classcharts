@@ -1,7 +1,7 @@
 {
   "domain": "classcharts",
   "name": "Class Charts Timetable",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "documentation": "https://github.com/skid88/Classcharts",
   "issue_tracker": "https://github.com/skid88/Classcharts/issues",
   "codeowners": ["@skid88"],
