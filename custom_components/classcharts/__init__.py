@@ -30,7 +30,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
-    await hass.config_entries.async_forward_entry_setups(entry, ["calendar"])
+    await hass.config_entries.async_forward_entry_setups(entry, ["calendar", "sensor"])
     
     # Listen for option updates (when user clicks 'Configure' and saves)
     entry.async_on_unload(entry.add_update_listener(update_listener))
