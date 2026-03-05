@@ -22,9 +22,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
     await hass.config_entries.async_forward_entry_setups(entry, ["calendar"])
+    
+    # Listen for option updates (when user clicks 'Configure' and saves)
+    entry.async_on_unload(entry.add_update_listener(update_listener))
+    
     return True
 
-def sync_get_classcharts_data(email, password, pupil_id):
+async def update_listener(hass: HomeAssistant, entry: ConfigEntry):
+    """Handle options update."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
     """Fetch data using the exact meta -> session_id structure provided."""
     session = requests.Session()
     session.headers.update({
@@ -43,22 +51,21 @@ def sync_get_classcharts_data(email, password, pupil_id):
         login_resp.raise_for_status()
         login_json = login_resp.json()
 
-        # DRILL DOWN: Based on your provided response structure
-        # meta -> session_id
         token = login_json.get("meta", {}).get("session_id")
 
         if not token:
-            _LOGGER.error("Login failed: Could not find 'session_id' inside 'meta'. Response: %s", login_json)
+            _LOGGER.error("Login failed: Could not find 'session_id' inside 'meta'.")
             return {}
 
-        _LOGGER.debug("Login successful. Token: %s...", token[:8])
+        _LOGGER.debug("Login successful. Token acquired.")
 
         full_schedule = {}
-        for i in range(7):
+        # Use the dynamic days_to_fetch variable here
+        for i in range(days_to_fetch):
             target_date = datetime.date.today() + datetime.timedelta(days=i)
             date_str = target_date.strftime("%Y-%m-%d")
 
-            # 2. Ping Revalidation (to keep token fresh)
+            # 2. Ping Revalidation
             ping_resp = session.post(
                 PING_URL,
                 headers={"Authorization": f"Basic {token}"},
@@ -68,7 +75,6 @@ def sync_get_classcharts_data(email, password, pupil_id):
             
             if ping_resp.status_code == 200:
                 ping_json = ping_resp.json()
-                # Update token from the new meta -> session_id
                 token = ping_json.get("meta", {}).get("session_id") or token
 
             # 3. Timetable Fetch
@@ -81,7 +87,6 @@ def sync_get_classcharts_data(email, password, pupil_id):
             
             day_data = resp.json()
             
-            # The lessons list is typically in 'data'
             if isinstance(day_data, dict):
                 lessons = day_data.get("data", [])
                 full_schedule[date_str] = lessons if isinstance(lessons, list) else []
@@ -97,21 +102,26 @@ def sync_get_classcharts_data(email, password, pupil_id):
         session.close()
 
 class ClassChartsCoordinator(DataUpdateCoordinator):
-    """Coordinator to manage daily updates."""
+    """Coordinator to manage dynamic updates based on user options."""
     def __init__(self, hass, entry):
+        # Pull options from the entry, fallback to defaults (24h refresh, 7 days fetch)
+        self.refresh_interval = entry.options.get("refresh_interval", 24)
+        self.days_to_fetch = entry.options.get("days_to_fetch", 7)
+
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(hours=24),
+            update_interval=timedelta(hours=self.refresh_interval),
         )
         self.entry = entry
 
     async def _async_update_data(self):
-        """Executor job to run synchronous requests."""
+        """Executor job passing user-configured days_to_fetch."""
         return await self.hass.async_add_executor_job(
             sync_get_classcharts_data,
             self.entry.data[CONF_EMAIL],
             self.entry.data[CONF_PASSWORD],
-            self.entry.data[CONF_PUPIL_ID]
+            self.entry.data[CONF_PUPIL_ID],
+            self.days_to_fetch
         )
