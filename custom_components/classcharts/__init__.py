@@ -25,52 +25,67 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 def sync_get_classcharts_data(email, password, pupil_id):
-    """Fetch data with a bulletproof 'safe_get' to prevent list attribute errors."""
+    """Fetch data following the exact Ping revalidation schema."""
     session = requests.Session()
-    session.headers.update({"User-Agent": "Mozilla/5.0 HA-Integration"})
+    # Class Charts often requires the form-encoded content type for POSTs
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 HA-Integration",
+        "Content-Type": "application/x-www-form-urlencoded"
+    })
     
-    def safe_get(data, key, default=None):
-        """Helper to safely get a key whether data is a list or dict."""
-        if isinstance(data, dict):
-            return data.get(key, default)
-        return default
-
     try:
         # 1. Login
-        login_resp = session.post(LOGIN_URL, data={"email": email, "password": password, "remember": "true"}, timeout=10)
+        _LOGGER.debug("Attempting login...")
+        login_resp = session.post(
+            LOGIN_URL, 
+            data={"email": email, "password": password, "remember": "true"},
+            timeout=10
+        )
         login_resp.raise_for_status()
         login_json = login_resp.json()
 
-        # Safely extract token
-        token = safe_get(login_json, "data") or safe_get(login_json, "token")
-        
-        if not token:
-            _LOGGER.error("Login failed: No token found. Response type: %s", type(login_json))
+        # The initial token is in the 'data' field
+        token = login_json.get("data")
+        if not token or not isinstance(token, str):
+            _LOGGER.error("Login failed: 'data' field did not contain a valid token string")
             return {}
 
         full_schedule = {}
         for i in range(7):
             date_str = (datetime.date.today() + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
 
-            # 2. Ping Revalidation
-            ping_resp = session.post(PING_URL, headers={"Authorization": f"Basic {token}"}, data={"include_data": "true"}, timeout=10)
+            # 2. Ping Revalidation (POST request as per docs)
+            # This 'checks in' and gets the fresh session_id for the next fetch
+            ping_resp = session.post(
+                PING_URL,
+                headers={"Authorization": f"Basic {token}"},
+                data={"include_data": "true"},
+                timeout=10
+            )
+            
             if ping_resp.status_code == 200:
                 ping_json = ping_resp.json()
-                # Safely drill down into meta -> session_id
-                meta = safe_get(ping_json, "meta", {})
-                token = safe_get(meta, "session_id") or token
+                # DOCS: Response -> meta -> session_id
+                if isinstance(ping_json, dict):
+                    new_token = ping_json.get("meta", {}).get("session_id")
+                    if new_token:
+                        token = new_token
+                        _LOGGER.debug("Token rotated for date: %s", date_str)
 
-            # 3. Timetable Fetch
-            resp = session.get(f"{TIMETABLE_URL}/{pupil_id}?date={date_str}", headers={"Authorization": f"Basic {token}"}, timeout=10)
-            day_data = resp.json()
-
-            # 4. Extract Lessons Safely
-            if isinstance(day_data, list):
-                full_schedule[date_str] = day_data
-            else:
-                full_schedule[date_str] = safe_get(day_data, "data", [])
+            # 3. Timetable Fetch (GET request)
+            resp = session.get(
+                f"{TIMETABLE_URL}/{pupil_id}?date={date_str}",
+                headers={"Authorization": f"Basic {token}"},
+                timeout=10
+            )
             
-            _LOGGER.debug("Day %s: Found %s lessons", date_str, len(full_schedule[date_str]))
+            day_data = resp.json()
+            
+            # Extract the lesson list. Documentation says it's in 'data'
+            if isinstance(day_data, dict):
+                full_schedule[date_str] = day_data.get("data", [])
+            elif isinstance(day_data, list):
+                full_schedule[date_str] = day_data
             
         return full_schedule
 
