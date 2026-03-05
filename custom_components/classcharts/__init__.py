@@ -8,7 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 
-from .const import DOMAIN, LOGIN_URL, TIMETABLE_URL, CONF_PUPIL_ID
+from .const import DOMAIN, LOGIN_URL, PING_URL, TIMETABLE_URL, CONF_PUPIL_ID
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -16,7 +16,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Class Charts from a config entry."""
     coordinator = ClassChartsCoordinator(hass, entry)
     
-    # Perform initial setup
     await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})
@@ -26,19 +25,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 def sync_get_classcharts_data(email, password, pupil_id):
-    """Fetch data using the official Basic auth and Ping rotation."""
+    """Fetch data using Session, Basic Auth, and Ping revalidation."""
     session = requests.Session()
     session.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     })
     
-    # Define the Ping URL based on your TIMETABLE_URL base
-    # Usually: https://www.classcharts.com/apiv2parent/ping
-    PING_URL = LOGIN_URL.replace("/login", "/ping")
-
     try:
         # 1. Login
-        _LOGGER.debug("Logging in to Class Charts...")
+        _LOGGER.debug("Logging in to Class Charts Parent API")
         login_resp = session.post(
             LOGIN_URL, 
             data={"email": email, "password": password, "remember": "true"},
@@ -46,21 +41,20 @@ def sync_get_classcharts_data(email, password, pupil_id):
         )
         login_resp.raise_for_status()
         
-        # The docs say the token is returned here
+        # Initial token from login
         token = login_resp.json().get("data")
         if not token:
-            _LOGGER.error("Login failed: No token in response")
+            _LOGGER.error("Login failed: No token returned in 'data'")
             return {}
 
-        # 2. Fetch 7 days with Ping-based revalidation
+        # 2. Loop through 7 days of lessons
         full_schedule = {}
         for i in range(7):
             target_date = datetime.date.today() + datetime.timedelta(days=i)
             date_str = target_date.strftime("%Y-%m-%d")
 
-            # --- THE PING (Revalidation) ---
-            # Docs say: Authorization: Basic <token>
-            _LOGGER.debug("Pinging for session revalidation...")
+            # --- THE PING (Revalidation as per Docs) ---
+            # Revalidates the session and gets a potential new session_id
             ping_resp = session.post(
                 PING_URL,
                 headers={"Authorization": f"Basic {token}"},
@@ -68,24 +62,26 @@ def sync_get_classcharts_data(email, password, pupil_id):
                 timeout=10
             )
             
-            # Update token from the 'meta' section as per docs
-            ping_data = ping_resp.json()
-            token = ping_data.get("meta", {}).get("session_id") or token
+            if ping_resp.status_code == 200:
+                ping_data = ping_resp.json()
+                # Update token if a new session_id is provided in meta
+                token = ping_data.get("meta", {}).get("session_id") or token
             
             # --- THE DATA FETCH ---
-            _LOGGER.debug("Fetching timetable for %s", date_str)
+            _LOGGER.debug("Fetching lessons for %s", date_str)
             resp = session.get(
                 f"{TIMETABLE_URL}/{pupil_id}?date={date_str}",
-                headers={"Authorization": f"Basic {token}"}, # Use updated token
+                headers={"Authorization": f"Basic {token}"},
                 timeout=10
             )
             
             day_data = resp.json()
             if day_data.get("success") == 0:
-                _LOGGER.warning("Failed on %s: %s", date_str, day_data.get("error"))
+                _LOGGER.warning("Day %s skipped: %s", date_str, day_data.get("error"))
                 continue
 
             full_schedule[date_str] = day_data.get("data", [])
+            _LOGGER.debug("Successfully loaded %s lessons for %s", len(full_schedule[date_str]), date_str)
             
         return full_schedule
 
@@ -96,8 +92,7 @@ def sync_get_classcharts_data(email, password, pupil_id):
         session.close()
 
 class ClassChartsCoordinator(DataUpdateCoordinator):
-    """Coordinator to handle the sync."""
-
+    """Coordinator to manage daily updates."""
     def __init__(self, hass, entry):
         super().__init__(
             hass,
@@ -108,7 +103,7 @@ class ClassChartsCoordinator(DataUpdateCoordinator):
         self.entry = entry
 
     async def _async_update_data(self):
-        """Fetch data from API."""
+        """Executor job to run synchronous requests."""
         return await self.hass.async_add_executor_job(
             sync_get_classcharts_data,
             self.entry.data[CONF_EMAIL],
