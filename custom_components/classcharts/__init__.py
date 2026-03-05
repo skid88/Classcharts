@@ -25,63 +25,56 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 def sync_get_classcharts_data(email, password, pupil_id):
-    """Fetch data using Session, Basic Auth, and Ping revalidation."""
+    """Fetch data with robust type checking for lists vs dicts."""
     session = requests.Session()
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    })
+    session.headers.update({"User-Agent": "Mozilla/5.0 HA-Integration"})
     
     try:
         # 1. Login
-        _LOGGER.debug("Logging in to Class Charts Parent API")
-        login_resp = session.post(
-            LOGIN_URL, 
-            data={"email": email, "password": password, "remember": "true"},
-            timeout=10
-        )
+        login_resp = session.post(LOGIN_URL, data={"email": email, "password": password, "remember": "true"}, timeout=10)
         login_resp.raise_for_status()
-        
-        # Initial token from login
-        token = login_resp.json().get("data")
-        if not token:
-            _LOGGER.error("Login failed: No token returned in 'data'")
+        login_data = login_resp.json()
+
+        # Extract token safely from dict
+        if isinstance(login_data, dict):
+            token = login_data.get("data") or login_data.get("token")
+        else:
+            _LOGGER.error("Login failed: Expected dict but got %s", type(login_data))
             return {}
 
-        # 2. Loop through 7 days of lessons
+        if not token:
+            _LOGGER.error("Login failed: No token found in response")
+            return {}
+
         full_schedule = {}
         for i in range(7):
-            target_date = datetime.date.today() + datetime.timedelta(days=i)
-            date_str = target_date.strftime("%Y-%m-%d")
+            date_str = (datetime.date.today() + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
 
-            # --- THE PING (Revalidation as per Docs) ---
-            # Revalidates the session and gets a potential new session_id
-            ping_resp = session.post(
-                PING_URL,
-                headers={"Authorization": f"Basic {token}"},
-                data={"include_data": "true"},
-                timeout=10
-            )
-            
+            # --- Ping to keep session alive ---
+            ping_resp = session.post(PING_URL, headers={"Authorization": f"Basic {token}"}, data={"include_data": "true"}, timeout=10)
             if ping_resp.status_code == 200:
-                ping_data = ping_resp.json()
-                # Update token if a new session_id is provided in meta
-                token = ping_data.get("meta", {}).get("session_id") or token
-            
-            # --- THE DATA FETCH ---
-            _LOGGER.debug("Fetching lessons for %s", date_str)
-            resp = session.get(
-                f"{TIMETABLE_URL}/{pupil_id}?date={date_str}",
-                headers={"Authorization": f"Basic {token}"},
-                timeout=10
-            )
-            
-            day_data = resp.json()
-            if day_data.get("success") == 0:
-                _LOGGER.warning("Day %s skipped: %s", date_str, day_data.get("error"))
-                continue
+                ping_json = ping_resp.json()
+                if isinstance(ping_json, dict):
+                    token = ping_json.get("meta", {}).get("session_id") or token
 
-            full_schedule[date_str] = day_data.get("data", [])
-            _LOGGER.debug("Successfully loaded %s lessons for %s", len(full_schedule[date_str]), date_str)
+            # --- Fetch Timetable ---
+            resp = session.get(f"{TIMETABLE_URL}/{pupil_id}?date={date_str}", headers={"Authorization": f"Basic {token}"}, timeout=10)
+            day_data = resp.json()
+
+            # --- THE FIX: Handle both List and Dict responses ---
+            if isinstance(day_data, list):
+                # The API returned the lessons directly as a list
+                full_schedule[date_str] = day_data
+                _LOGGER.debug("Loaded %s lessons from LIST for %s", len(day_data), date_str)
+            
+            elif isinstance(day_data, dict):
+                # The API returned a dict, try to find the list inside 'data'
+                lessons = day_data.get("data", [])
+                full_schedule[date_str] = lessons if isinstance(lessons, list) else []
+                _LOGGER.debug("Loaded %s lessons from DICT for %s", len(full_schedule[date_str]), date_str)
+            
+            else:
+                _LOGGER.warning("Unexpected data type for %s: %s", date_str, type(day_data))
             
         return full_schedule
 
