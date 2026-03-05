@@ -8,7 +8,16 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 
-from .const import DOMAIN, LOGIN_URL, PING_URL, TIMETABLE_URL, CONF_PUPIL_ID
+# Import everything from your constants file
+from .const import (
+    DOMAIN, 
+    LOGIN_URL, 
+    PING_URL, 
+    TIMETABLE_URL, 
+    CONF_PUPIL_ID,
+    CONF_REFRESH_INTERVAL,
+    CONF_DAYS_TO_FETCH
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,7 +38,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 async def update_listener(hass: HomeAssistant, entry: ConfigEntry):
-    """Handle options update."""
+    """Handle options update - reloads the integration to apply new intervals."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
@@ -60,7 +69,6 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         _LOGGER.debug("Login successful. Token acquired.")
 
         full_schedule = {}
-        # Use the dynamic days_to_fetch variable here
         for i in range(days_to_fetch):
             target_date = datetime.date.today() + datetime.timedelta(days=i)
             date_str = target_date.strftime("%Y-%m-%d")
@@ -104,9 +112,9 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
 class ClassChartsCoordinator(DataUpdateCoordinator):
     """Coordinator to manage dynamic updates based on user options."""
     def __init__(self, hass, entry):
-        # Pull options from the entry, fallback to defaults (24h refresh, 7 days fetch)
-        self.refresh_interval = entry.options.get("refresh_interval", 24)
-        self.days_to_fetch = entry.options.get("days_to_fetch", 7)
+        # Use constants to pull values from options
+        self.refresh_interval = entry.options.get(CONF_REFRESH_INTERVAL, 24)
+        self.days_to_fetch = entry.options.get(CONF_DAYS_TO_FETCH, 7)
 
         super().__init__(
             hass,
