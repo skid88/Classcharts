@@ -50,7 +50,8 @@ Once installed, the following entities will be available:
 - `sensor.class_charts_current_lesson`: Displays the subject and room of the current class.
 - `sensor.class_charts_next_lesson`: Displays what is coming up next and the start time.
 
-- ![Screenshot]https://github.com/skid88/Classcharts/blob/main/Timetable.png
+
+ ![Screenshot](https://github.com/skid88/Classcharts/blob/main/Timetable.png)
 
 ---
 
@@ -61,4 +62,5 @@ If you encounter any issues or have feature requests, please open an [Issue](htt
 
 ## 📝 License
 This project is for personal use and is not an official Class Charts product.
+
 
