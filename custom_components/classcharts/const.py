@@ -16,3 +16,7 @@ CONF_PUPIL_ID = "pupil_id"
 ATTR_TEACHER = "teacher"
 ATTR_ROOM = "room"
 ATTR_SUBJECT = "subject"
+
+#Define
+CONF_REFRESH_INTERVAL = "refresh_interval"
+CONF_DAYS_TO_FETCH = "days_to_fetch"
