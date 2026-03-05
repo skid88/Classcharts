@@ -8,7 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 
-# Import everything from your constants file
+# Constants file
 from .const import (
     DOMAIN, 
     LOGIN_URL, 
