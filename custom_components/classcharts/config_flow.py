@@ -2,11 +2,12 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
-from .const import DOMAIN, CONF_PUPIL_ID
-
-# These keys match what we used in the __init__.py coordinator
-CONF_REFRESH_INTERVAL = "refresh_interval"
-CONF_DAYS_TO_FETCH = "days_to_fetch"
+from .const import (
+    DOMAIN, 
+    CONF_PUPIL_ID, 
+    CONF_REFRESH_INTERVAL, 
+    CONF_DAYS_TO_FETCH
+)
 
 class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Class Charts."""
@@ -18,13 +19,11 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
-            # Create the entry with the provided credentials
             return self.async_create_entry(
                 title=user_input[CONF_EMAIL], 
                 data=user_input
             )
 
-        # Initial Setup Form
         data_schema = vol.Schema({
             vol.Required(CONF_EMAIL): str,
             vol.Required(CONF_PASSWORD): str,
@@ -56,7 +55,7 @@ class ClassChartsOptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        # Build the dynamic settings form
+        # Build the dynamic settings form using constants from const.py
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
