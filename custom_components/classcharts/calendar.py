@@ -20,7 +20,7 @@ class ClassChartsCalendar(CalendarEntity):
     def __init__(self, coordinator, pupil_id):
         self.coordinator = coordinator
         self._pupil_id = pupil_id
-        self._attr_name = f"Class Charts ({pupil_id})"
+        self._attr_name = "Class Charts Timetable"
         self._attr_unique_id = f"{pupil_id}_timetable"
 
     @property
