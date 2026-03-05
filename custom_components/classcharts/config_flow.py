@@ -9,7 +9,7 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(self, user_input=None):
-        """Initial setup step."""
+        """Initial setup."""
         if user_input is not None:
             return self.async_create_entry(
                 title=user_input[CONF_EMAIL], 
@@ -28,22 +28,28 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        """This is what makes the 'COG' appear."""
-        return ClassChartsOptionsFlowHandler(config_entry)
+        """Create the options flow."""
+        return ClassChartsOptionsFlowHandler()  # <-- No config_entry passed here anymore!
 
 class ClassChartsOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle the settings menu."""
-    def __init__(self, config_entry):
-        self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
+        """Manage the options."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
+        # In modern HA, self.config_entry is already available automatically
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
-                vol.Optional("days_to_fetch", default=7): int,
-                vol.Optional("refresh_interval", default=24): int,
+                vol.Optional(
+                    "days_to_fetch", 
+                    default=self.config_entry.options.get("days_to_fetch", 7)
+                ): int,
+                vol.Optional(
+                    "refresh_interval", 
+                    default=self.config_entry.options.get("refresh_interval", 24)
+                ): int,
             })
         )
