@@ -11,8 +11,6 @@
     "requests>=2.31.0"
   ],
   "config_flow": true,
-  "homeassistant": "2024.1.0"
-  switch.my_switch:
-  friendly_name: My Switch
-  icon: mdi:calendar-account-outline
+  "homeassistant": "2024.1.0",
+  "icon": "mdi:calendar-account-outline"
 }
