@@ -26,17 +26,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 def sync_get_classcharts_data(email, password, pupil_id):
-    """Fetch data using a Session with enhanced headers."""
+    """Fetch data using the official Basic auth and Ping rotation."""
     session = requests.Session()
-    # 1. Pretend to be a real browser
     session.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "application/json, text/plain, */*",
     })
     
+    # Define the Ping URL based on your TIMETABLE_URL base
+    # Usually: https://www.classcharts.com/apiv2parent/ping
+    PING_URL = LOGIN_URL.replace("/login", "/ping")
+
     try:
-        # 2. Login
-        _LOGGER.debug("Attempting session login for %s", email)
+        # 1. Login
+        _LOGGER.debug("Logging in to Class Charts...")
         login_resp = session.post(
             LOGIN_URL, 
             data={"email": email, "password": password, "remember": "true"},
@@ -44,45 +46,51 @@ def sync_get_classcharts_data(email, password, pupil_id):
         )
         login_resp.raise_for_status()
         
-        json_resp = login_resp.json()
-        token = json_resp.get("data") or json_resp.get("token")
-        
+        # The docs say the token is returned here
+        token = login_resp.json().get("data")
         if not token:
-            _LOGGER.error("Login successful but no token found")
+            _LOGGER.error("Login failed: No token in response")
             return {}
 
-        # 3. Add Token AND Pupil-ID to headers (some schools require this)
-        session.headers.update({
-            "Authorization": f"Bearer {token}",
-            "X-Pupil-Id": str(pupil_id)
-        })
-
-        # 4. Fetch 7 days of lessons
+        # 2. Fetch 7 days with Ping-based revalidation
         full_schedule = {}
         for i in range(7):
             target_date = datetime.date.today() + datetime.timedelta(days=i)
             date_str = target_date.strftime("%Y-%m-%d")
+
+            # --- THE PING (Revalidation) ---
+            # Docs say: Authorization: Basic <token>
+            _LOGGER.debug("Pinging for session revalidation...")
+            ping_resp = session.post(
+                PING_URL,
+                headers={"Authorization": f"Basic {token}"},
+                data={"include_data": "true"},
+                timeout=10
+            )
             
-            # Use the session to maintain cookies
+            # Update token from the 'meta' section as per docs
+            ping_data = ping_resp.json()
+            token = ping_data.get("meta", {}).get("session_id") or token
+            
+            # --- THE DATA FETCH ---
+            _LOGGER.debug("Fetching timetable for %s", date_str)
             resp = session.get(
                 f"{TIMETABLE_URL}/{pupil_id}?date={date_str}",
-                timeout=15
+                headers={"Authorization": f"Basic {token}"}, # Use updated token
+                timeout=10
             )
             
             day_data = resp.json()
-            
-            # If we get an error, log it but keep going for other days
-            if day_data.get("success") == 0 or "error" in day_data:
-                _LOGGER.warning("Day %s failed: %s", date_str, day_data.get("error"))
+            if day_data.get("success") == 0:
+                _LOGGER.warning("Failed on %s: %s", date_str, day_data.get("error"))
                 continue
 
             full_schedule[date_str] = day_data.get("data", [])
-            _LOGGER.debug("Successfully fetched %s lessons for %s", len(full_schedule[date_str]), date_str)
             
         return full_schedule
 
     except Exception as err:
-        _LOGGER.error("Class Charts Session Error: %s", err)
+        _LOGGER.error("Class Charts Sync Error: %s", err)
         return {}
     finally:
         session.close()
