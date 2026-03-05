@@ -45,14 +45,14 @@ class ClassChartsCalendar(CalendarEntity):
                     continue
 
                 try:
-                    # Fetch ISO strings directly: 2026-03-10T13:40:00+00:00
+                    # Fetch ISO strings directly
                     st_raw = lesson.get('start_time')
                     et_raw = lesson.get('end_time')
 
                     if not st_raw or not et_raw:
                         continue
 
-                    # 1. Primary Attempt: Parse ISO format (matches your logs)
+                    # 1. Primary Attempt: Parse ISO format 
                     try:
                         start_dt = datetime.fromisoformat(st_raw)
                         end_dt = datetime.fromisoformat(et_raw)
