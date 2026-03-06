@@ -6,7 +6,6 @@ from .const import DOMAIN, CONF_PUPIL_ID
 
 _LOGGER = logging.getLogger(__name__)
 
-# THIS IS THE MISSING FUNCTION
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """Set up the Class Charts calendar platform."""
     coordinator = hass.data[DOMAIN][config_entry.entry_id]
@@ -17,6 +16,7 @@ class ClassChartsCalendar(CalendarEntity):
     """Representation of a Class Charts Timetable."""
 
     def __init__(self, coordinator, pupil_id):
+        super().__init__(coordinator)
         self.coordinator = coordinator
         self._pupil_id = pupil_id
         self._attr_name = "Class Charts Timetable"
@@ -28,7 +28,6 @@ class ClassChartsCalendar(CalendarEntity):
 
     def _get_events_from_data(self):
         events = []
-        # Use the 'timetable' key we added to the coordinator
         data = self.coordinator.data.get("timetable", {})
         
         for date_str, lessons in data.items():
@@ -37,7 +36,6 @@ class ClassChartsCalendar(CalendarEntity):
                     st_raw = lesson.get('start_time')
                     et_raw = lesson.get('end_time')
                     
-                    # Time parsing logic
                     try:
                         start_dt = datetime.fromisoformat(st_raw)
                         end_dt = datetime.fromisoformat(et_raw)
