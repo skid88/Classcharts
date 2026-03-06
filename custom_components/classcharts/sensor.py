@@ -4,7 +4,7 @@ import homeassistant.util.dt as dt_util
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_PUPIL_ID
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -12,23 +12,25 @@ async def async_setup_entry(hass, entry, async_add_entities):
     """Set up Class Charts sensors."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
     
+    # Get the pupil_id from the config entry to pass to the sensors
+    pupil_id = entry.data.get(CONF_PUPIL_ID)
+    
     _LOGGER.debug("Registering Class Charts sensors for entry: %s", entry.entry_id)
     
-    # Registering all three sensors at once
+    # We pass the coordinator AND pupil_id to all sensors to ensure unique_ids are consistent
     async_add_entities([
-        ClassChartsLessonSensor(coordinator, "Current Lesson", "current"),
-        ClassChartsLessonSensor(coordinator, "Next Lesson", "next"),
-        ClassChartsHomeworkSensor(coordinator)
+        ClassChartsLessonSensor(coordinator, "Current Lesson", "current", pupil_id),
+        ClassChartsLessonSensor(coordinator, "Next Lesson", "next", pupil_id),
+        ClassChartsHomeworkSensor(coordinator, pupil_id)
     ])
 
 class ClassChartsLessonSensor(CoordinatorEntity, SensorEntity):
     """Sensor for current/next lessons."""
 
-    def __init__(self, coordinator, name, sensor_type):
+    def __init__(self, coordinator, name, sensor_type, pupil_id):
         super().__init__(coordinator)
         self._attr_name = name
-        # Unique ID prevents "Ghost" entity conflicts
-        self._attr_unique_id = f"{coordinator.entry.entry_id}_lesson_{sensor_type}"
+        self._attr_unique_id = f"{pupil_id}_lesson_{sensor_type}"
         self.sensor_type = sensor_type
 
     @property
@@ -37,18 +39,14 @@ class ClassChartsLessonSensor(CoordinatorEntity, SensorEntity):
         if not self.coordinator.data:
             return "No Data"
 
-        # Dig into the 'timetable' key from the Coordinator dictionary
         timetable = self.coordinator.data.get("timetable", {})
         
-        # If the key is missing entirely, show a specific status
-        if not timetable and not isinstance(timetable, dict):
-            _LOGGER.error("Class Charts: 'timetable' key missing in coordinator data")
-            return "Key Error"
+        if not isinstance(timetable, dict):
+            return "Data Error"
 
         now = dt_util.now()
         lessons = []
 
-        # Parse the timetable data
         for date_str, day_lessons in timetable.items():
             if not isinstance(day_lessons, list):
                 continue
@@ -59,12 +57,10 @@ class ClassChartsLessonSensor(CoordinatorEntity, SensorEntity):
                     if not st_raw or not et_raw:
                         continue
 
-                    # Flexible time parsing for different API formats
                     try:
                         st = datetime.fromisoformat(st_raw)
                         et = datetime.fromisoformat(et_raw)
                     except ValueError:
-                        # Fallback: combine date key with HH:MM:SS
                         st = datetime.strptime(f"{date_str} {st_raw}", "%Y-%m-%d %H:%M:%S")
                         et = datetime.strptime(f"{date_str} {et_raw}", "%Y-%m-%d %H:%M:%S")
 
@@ -78,9 +74,8 @@ class ClassChartsLessonSensor(CoordinatorEntity, SensorEntity):
                     continue
 
         if not lessons:
-            return "No Lessons Found"
+            return "No Lessons"
 
-        # Sort all lessons by time to find current/next
         lessons.sort(key=lambda x: x["start"])
 
         if self.sensor_type == "current":
@@ -109,10 +104,7 @@ class ClassChartsHomeworkSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         """Return the count of homework tasks."""
-        # This reaches into the data we fetched in __init__.py
         data = self.coordinator.data.get("homework", {})
-        
-        # Class Charts returns homework in a 'data' list inside the homework object
         tasks = data.get("data", [])
         
         if isinstance(tasks, list):
@@ -126,13 +118,14 @@ class ClassChartsHomeworkSensor(CoordinatorEntity, SensorEntity):
         tasks = data.get("data", [])
         
         homework_list = []
-        for hw in tasks:
-            homework_list.append({
-                "title": hw.get("title"),
-                "subject": hw.get("subject", {}).get("name"),
-                "due": hw.get("due_date"),
-                "status": hw.get("status", {}).get("state")
-            })
+        if isinstance(tasks, list):
+            for hw in tasks:
+                homework_list.append({
+                    "title": hw.get("title"),
+                    "subject": hw.get("subject", {}).get("name"),
+                    "due": hw.get("due_date"),
+                    "status": hw.get("status", {}).get("state")
+                })
             
         return {
             "tasks": homework_list,
