@@ -1,7 +1,7 @@
 # 🏫 Class Charts for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-![Version](https://img.shields.io/badge/version-1.0.4-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.5-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Home_Assistant-blue.svg)
 
 A professional custom integration that brings your **Class Charts** school timetable directly into Home Assistant. Monitor lessons, track classrooms, and see which teacher you have next in real-time.
@@ -62,5 +62,6 @@ If you encounter any issues or have feature requests, please open an [Issue](htt
 
 ## 📝 License
 This project is for personal use and is not an official Class Charts product.
+
 
 
