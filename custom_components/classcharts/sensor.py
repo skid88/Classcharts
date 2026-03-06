@@ -13,7 +13,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities([
         ClassChartsLessonSensor(coordinator, "Current Lesson", "current"),
-        ClassChartsLessonSensor(coordinator, "Next Lesson", "next")
+        ClassChartsLessonSensor(coordinator, "Next Lesson", "next"), # Added missing comma here
+        ClassChartsHomeworkSensor(coordinator) # Added the homework sensor
     ])
 
 class ClassChartsLessonSensor(CoordinatorEntity, SensorEntity):
@@ -31,8 +32,11 @@ class ClassChartsLessonSensor(CoordinatorEntity, SensorEntity):
         now = dt_util.now()
         lessons = []
         
-        # Flatten all fetched days into one list of lessons
-        for date_str, day_lessons in self.coordinator.data.items():
+        # Accessing timetable data from the coordinator
+        # Note: We assume timetable data is stored in coordinator.data['timetable']
+        timetable_data = self.coordinator.data.get("timetable", {})
+        
+        for date_str, day_lessons in timetable_data.items():
             for lesson in day_lessons:
                 try:
                     st = datetime.fromisoformat(lesson["start_time"])
@@ -47,7 +51,6 @@ class ClassChartsLessonSensor(CoordinatorEntity, SensorEntity):
                 except (KeyError, ValueError):
                     continue
 
-        # Sort by start time
         lessons.sort(key=lambda x: x["start"])
 
         if self.sensor_type == "current":
@@ -64,8 +67,35 @@ class ClassChartsLessonSensor(CoordinatorEntity, SensorEntity):
 
         return None
 
+class ClassChartsHomeworkSensor(CoordinatorEntity, SensorEntity):
+    """Sensor for Class Charts Homework."""
+
+    def __init__(self, coordinator):
+        super().__init__(coordinator)
+        self._attr_name = "Homework To-Do"
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_homework"
+        self._attr_icon = "mdi:book-open-variant"
+
+    @property
+    def native_value(self):
+        """Return the number of outstanding homework tasks."""
+        meta = self.coordinator.data.get("homework", {}).get("meta", {})
+        return meta.get("this_week_outstanding_count", 0)
+
     @property
     def extra_state_attributes(self):
-        """Add extra details like teacher and room as attributes."""
-        # You can expand this to show more data in the 'more-info' dialog
-        return {"pupil_id": self.coordinator.entry.data.get("pupil_id")}
+        """Return detailed list of homework tasks."""
+        hw_data = self.coordinator.data.get("homework", {}).get("data", [])
+        tasks = []
+        for item in hw_data:
+            if item.get("status", {}).get("state") != "completed":
+                tasks.append({
+                    "title": item.get("title"),
+                    "subject": item.get("subject"),
+                    "due": item.get("due_date"),
+                    "teacher": item.get("teacher")
+                })
+        return {
+            "tasks": tasks,
+            "pupil_id": self.coordinator.entry.data.get("pupil_id")
+        }
