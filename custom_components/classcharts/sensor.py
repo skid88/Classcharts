@@ -32,10 +32,14 @@ class ClassChartsLessonSensor(CoordinatorEntity, SensorEntity):
         now = dt_util.now()
         lessons = []
         
-        # Accessing timetable data from the coordinator
-        # Note: We assume timetable data is stored in coordinator.data['timetable']
+        # FIX: Point to the 'timetable' key specifically
         timetable_data = self.coordinator.data.get("timetable", {})
         
+        if not timetable_data:
+            _LOGGER.debug("Lesson Sensor: No timetable data found in coordinator")
+            return "No Data"
+
+        # Flatten all fetched days into one list of lessons
         for date_str, day_lessons in timetable_data.items():
             for lesson in day_lessons:
                 try:
@@ -51,6 +55,7 @@ class ClassChartsLessonSensor(CoordinatorEntity, SensorEntity):
                 except (KeyError, ValueError):
                     continue
 
+        # Sort by start time
         lessons.sort(key=lambda x: x["start"])
 
         if self.sensor_type == "current":
