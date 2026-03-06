@@ -98,39 +98,43 @@ class ClassChartsLessonSensor(CoordinatorEntity, SensorEntity):
         return None
 
 class ClassChartsHomeworkSensor(CoordinatorEntity, SensorEntity):
-    """Sensor for Homework count and details."""
+    """Representation of the Homework sensor."""
 
-    def __init__(self, coordinator):
+    def __init__(self, coordinator, pupil_id):
         super().__init__(coordinator)
         self._attr_name = "Homework To-Do"
-        self._attr_unique_id = f"{coordinator.entry.entry_id}_homework_count"
+        self._attr_unique_id = f"{pupil_id}_homework"
         self._attr_icon = "mdi:book-open-variant"
 
     @property
     def native_value(self):
-        """Return the count of outstanding homework."""
-        if not self.coordinator.data:
-            return 0
-        # Access: data -> homework -> meta -> this_week_outstanding_count
-        homework_meta = self.coordinator.data.get("homework", {}).get("meta", {})
-        return homework_meta.get("this_week_outstanding_count", 0)
+        """Return the count of homework tasks."""
+        # This reaches into the data we fetched in __init__.py
+        data = self.coordinator.data.get("homework", {})
+        
+        # Class Charts returns homework in a 'data' list inside the homework object
+        tasks = data.get("data", [])
+        
+        if isinstance(tasks, list):
+            return len(tasks)
+        return 0
 
     @property
     def extra_state_attributes(self):
-        """Add individual homework tasks as attributes for dashboard lists."""
-        hw_data = self.coordinator.data.get("homework", {}).get("data", [])
+        """Return the detailed list of tasks as attributes."""
+        data = self.coordinator.data.get("homework", {})
+        tasks = data.get("data", [])
         
-        # Filter for only non-completed tasks
-        tasks = []
-        for item in hw_data:
-            if item.get("status", {}).get("state") != "completed":
-                tasks.append({
-                    "title": item.get("title"),
-                    "subject": item.get("subject"),
-                    "due": item.get("due_date")
-                })
-                
+        homework_list = []
+        for hw in tasks:
+            homework_list.append({
+                "title": hw.get("title"),
+                "subject": hw.get("subject", {}).get("name"),
+                "due": hw.get("due_date"),
+                "status": hw.get("status", {}).get("state")
+            })
+            
         return {
-            "tasks": tasks,
-            "total_completed_this_week": self.coordinator.data.get("homework", {}).get("meta", {}).get("this_week_completed_count", 0)
+            "tasks": homework_list,
+            "total_completed_this_week": data.get("meta", {}).get("completed_count", 0)
         }
