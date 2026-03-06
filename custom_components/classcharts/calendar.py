@@ -2,25 +2,25 @@ import logging
 from datetime import datetime
 import homeassistant.util.dt as dt_util
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN, CONF_PUPIL_ID
 
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     """Set up the Class Charts timetable platform."""
-    # This pulls the coordinator we created in __init__.py
     coordinator = hass.data[DOMAIN][config_entry.entry_id]
     pupil_id = config_entry.data.get(CONF_PUPIL_ID)
     
-    _LOGGER.debug("Setting up Class Charts timetable for pupil: %s", pupil_id)
+    _LOGGER.debug("Setting up Class Charts calendar for pupil: %s", pupil_id)
     async_add_entities([ClassChartsCalendar(coordinator, pupil_id)])
 
-class ClassChartsCalendar(CalendarEntity):
+class ClassChartsCalendar(CoordinatorEntity, CalendarEntity):
     """Representation of a Class Charts Timetable."""
 
     def __init__(self, coordinator, pupil_id):
+        """Pass the coordinator to CoordinatorEntity."""
         super().__init__(coordinator)
-        self.coordinator = coordinator
         self._pupil_id = pupil_id
         self._attr_name = "Class Charts Timetable"
         self._attr_unique_id = f"{pupil_id}_timetable_cal"
@@ -37,6 +37,7 @@ class ClassChartsCalendar(CalendarEntity):
         data = self.coordinator.data.get("timetable", {})
         
         if not data:
+            _LOGGER.debug("No timetable data found in coordinator")
             return events
 
         for date_str, lessons in data.items():
@@ -83,4 +84,5 @@ class ClassChartsCalendar(CalendarEntity):
         """Return the next/current upcoming event."""
         all_events = sorted(self._get_events_from_data(), key=lambda x: x.start)
         now = dt_util.now()
+        # Find the first event that hasn't ended yet
         return next((e for e in all_events if e.end > now), None)
