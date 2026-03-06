@@ -8,7 +8,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 
-# Constants file
+# Ensure HOMEWORK_URL is added to your .const file or defined here
+# HOMEWORK_URL = "https://www.classcharts.com/apiv2parent/homeworks"
+
 from .const import (
     DOMAIN, 
     LOGIN_URL, 
@@ -32,17 +34,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, ["calendar", "sensor"])
     
-    # Listen for option updates (when user clicks 'Configure' and saves)
     entry.async_on_unload(entry.add_update_listener(update_listener))
     
     return True
 
 async def update_listener(hass: HomeAssistant, entry: ConfigEntry):
-    """Handle options update - reloads the integration to apply new intervals."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
-    """Fetch data using the exact meta -> session_id structure provided."""
+    """Fetch both Timetable and Homework data."""
     session = requests.Session()
     session.headers.update({
         "User-Agent": "Mozilla/5.0 HA-Integration",
@@ -51,7 +51,6 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
     
     try:
         # 1. Login
-        _LOGGER.debug("Logging in to Class Charts...")
         login_resp = session.post(
             LOGIN_URL, 
             data={"email": email, "password": password, "remember": "true"},
@@ -59,40 +58,23 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         )
         login_resp.raise_for_status()
         login_json = login_resp.json()
-
         token = login_json.get("meta", {}).get("session_id")
 
         if not token:
-            _LOGGER.error("Login failed: Could not find 'session_id' inside 'meta'.")
+            _LOGGER.error("Login failed: No session_id found.")
             return {}
 
-        _LOGGER.debug("Login successful. Token acquired.")
-
+        # 2. Fetch Timetable
         full_schedule = {}
         for i in range(days_to_fetch):
             target_date = datetime.date.today() + datetime.timedelta(days=i)
             date_str = target_date.strftime("%Y-%m-%d")
 
-            # 2. Ping Revalidation
-            ping_resp = session.post(
-                PING_URL,
-                headers={"Authorization": f"Basic {token}"},
-                data={"include_data": "true"},
-                timeout=10
-            )
-            
-            if ping_resp.status_code == 200:
-                ping_json = ping_resp.json()
-                token = ping_json.get("meta", {}).get("session_id") or token
-
-            # 3. Timetable Fetch
-            _LOGGER.debug("Fetching lessons for %s", date_str)
             resp = session.get(
                 f"{TIMETABLE_URL}/{pupil_id}?date={date_str}",
                 headers={"Authorization": f"Basic {token}"},
                 timeout=10
             )
-            
             day_data = resp.json()
             
             if isinstance(day_data, dict):
@@ -100,8 +82,28 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
                 full_schedule[date_str] = lessons if isinstance(lessons, list) else []
             elif isinstance(day_data, list):
                 full_schedule[date_str] = day_data
-            
-        return full_schedule
+
+        # 3. Fetch Homework
+        # We'll fetch from 1 day ago to 30 days in the future to catch everything
+        hw_from = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+        hw_to = (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y-%m-%d")
+        
+        # Note: You may need to add HOMEWORK_URL to your const.py
+        # It is usually: https://www.classcharts.com/apiv2parent/homeworks
+        hw_url = f"https://www.classcharts.com/apiv2parent/homeworks/{pupil_id}?display_date=due_date&from={hw_from}&to={hw_to}"
+        
+        hw_resp = session.get(
+            hw_url,
+            headers={"Authorization": f"Basic {token}"},
+            timeout=10
+        )
+        homework_data = hw_resp.json()
+
+        # Return combined data
+        return {
+            "timetable": full_schedule,
+            "homework": homework_data
+        }
 
     except Exception as err:
         _LOGGER.error("Class Charts Sync Error: %s", err)
@@ -110,9 +112,7 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         session.close()
 
 class ClassChartsCoordinator(DataUpdateCoordinator):
-    """Coordinator to manage dynamic updates based on user options."""
     def __init__(self, hass, entry):
-        # Use constants to pull values from options
         self.refresh_interval = entry.options.get(CONF_REFRESH_INTERVAL, 24)
         self.days_to_fetch = entry.options.get(CONF_DAYS_TO_FETCH, 7)
 
@@ -125,7 +125,6 @@ class ClassChartsCoordinator(DataUpdateCoordinator):
         self.entry = entry
 
     async def _async_update_data(self):
-        """Executor job passing user-configured days_to_fetch."""
         return await self.hass.async_add_executor_job(
             sync_get_classcharts_data,
             self.entry.data[CONF_EMAIL],
