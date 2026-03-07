@@ -34,11 +34,11 @@ class ClassChartsMultiSensor(CoordinatorEntity, SensorEntity):
         self._name = name
         self._icon = icon
         
-        # We use a very specific Unique ID to force them to be separate
+        # Unique ID to force them to be separate
         self._attr_unique_id = f"cc_{entry_id}_{sensor_type}_v7"
         self._attr_icon = icon
         
-        # This tells HA to use the name we provide exactly
+        # This tells HA to use the name exactly
         self._attr_name = name
         self._attr_has_entity_name = False 
 
