@@ -6,38 +6,49 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Set up all Class Charts sensors with weekend-safe logic."""
+    """Set up Class Charts sensors. Outstanding is now first for priority."""
     coordinator = hass.data["classcharts"][entry.entry_id]
     
-    async_add_entities([
+    # We define the list first to ensure all are included
+    entities = [
         CCHomeworkOutstanding(coordinator, entry.entry_id),
         CCHomeworkCompleted(coordinator, entry.entry_id),
         CCHomeworkTotal(coordinator, entry.entry_id),
         CCTimetableMain(coordinator, entry.entry_id),
         CCCurrentLesson(coordinator, entry.entry_id),
         CCNextLesson(coordinator, entry.entry_id)
-    ], True)
+    ]
+    
+    async_add_entities(entities, True)
 
-# --- 1. OUTSTANDING HOMEWORK ---
 class CCHomeworkOutstanding(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry_id):
         super().__init__(coordinator)
         self._attr_name = "Homework Outstanding"
-        self._attr_unique_id = f"{entry_id}_outstanding_v25"
+        self._attr_unique_id = f"{entry_id}_hw_outstanding_v26"
         self._attr_icon = "mdi:alert-circle-outline"
         self._attr_native_unit_of_measurement = "Tasks"
 
     @property
     def native_value(self):
         try:
-            hw_root = self.coordinator.data.get("homework", {})
+            # High-res debugging to find why data might be missing
+            data = self.coordinator.data
+            if not data or "homework" not in data:
+                return 0
+            
+            hw_root = data.get("homework", {})
             items = hw_root.get("data", []) if isinstance(hw_root, dict) else []
+            
             now = datetime.now()
+            # Calculate Sunday night 23:59:59
             end_of_week = (now + timedelta(days=6 - now.weekday())).replace(hour=23, minute=59, second=59)
             
             count = 0
             for hw in items:
-                if hw.get("status", {}).get("ticked") != "yes":
+                # Double check the status exists
+                status = hw.get("status", {})
+                if status and status.get("ticked") != "yes":
                     due_str = hw.get("due_date", "")
                     if due_str:
                         due_dt = datetime.strptime(due_str[:10], "%Y-%m-%d")
@@ -45,7 +56,7 @@ class CCHomeworkOutstanding(CoordinatorEntity, SensorEntity):
                             count += 1
             return count
         except Exception as e:
-            _LOGGER.debug("Error calculating outstanding homework: %s", e)
+            _LOGGER.error("Outstanding HW Sensor error: %s", e)
             return 0
 
 # --- 2. COMPLETED HOMEWORK ---
