@@ -33,7 +33,7 @@ class ClassChartsCalendar(CoordinatorEntity, CalendarEntity):
     def _get_events_from_data(self):
         """Helper to parse the coordinator data into calendar events."""
         events = []
-        # Access the 'timetable' key we defined in __init__.py
+        # Access the 'timetable' key defined in __init__.py
         data = self.coordinator.data.get("timetable", {})
         
         if not data:
