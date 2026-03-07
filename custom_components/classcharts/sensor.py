@@ -65,7 +65,7 @@ class CCHomeworkTotal(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator)
         self._attr_name = "Homework Total Due"
         self._attr_unique_id = f"{entry_id}_total_due_v30"
-        self._attr_icon = "mdi:book-open-variant"
+        self._attr_icon = "mdi:book-open-page-variant"
         self._attr_native_unit_of_measurement = "Tasks"
 
     @property
