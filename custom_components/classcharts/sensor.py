@@ -9,7 +9,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     """Set up all 6 Class Charts sensors with unique classes."""
     coordinator = hass.data["classcharts"][entry.entry_id]
     
-    # We create each sensor using its own specific class to prevent "merging"
+    # Each sensor using its own specific class to prevent "merging"
     async_add_entities([
         CCHomeworkOutstanding(coordinator, entry.entry_id),
         CCHomeworkCompleted(coordinator, entry.entry_id),
