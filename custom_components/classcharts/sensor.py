@@ -59,7 +59,11 @@ class CCHomeworkCompleted(CoordinatorEntity, SensorEntity):
         try:
             hw_data = self.coordinator.data.get("homework", {})
             items = hw_data.get("data", []) if isinstance(hw_data, dict) else []
-            return sum(1 for hw in items if hw.get("status", {}).get("ticked") == "yes")
+            count = 0
+            for hw in items:
+                if hw.get("status", {}).get("ticked") == "yes":
+                    count += 1
+            return count
         except: return 0
 
 # --- 3. TOTAL HOMEWORK ---
