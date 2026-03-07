@@ -6,104 +6,90 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Set up all 6 Class Charts sensors."""
+    """Set up all 6 Class Charts sensors via a dynamic list."""
     coordinator = hass.data["classcharts"][entry.entry_id]
     
-    async_add_entities([
-        CCHomeworkOutstanding(coordinator),
-        CCHomeworkCompleted(coordinator),
-        CCHomeworkTotal(coordinator),
-        CCTimetableMain(coordinator),
-        CCCurrentLesson(coordinator),
-        CCNextLesson(coordinator)
-    ], True)
+    # We define the sensors here with distinct 'type' tags
+    sensors = [
+        ("outstanding", "Homework Outstanding This Week", "mdi:alert-circle-outline"),
+        ("completed", "Homework Completed This Week", "mdi:check-circle-outline"),
+        ("due_total", "Homework Total Due This Week", "mdi:book-open-variant"),
+        ("timetable", "Class Charts Timetable", "mdi:calendar-clock"),
+        ("current", "Class Charts Current Lesson", "mdi:school-outline"),
+        ("next", "Class Charts Next Lesson", "mdi:school"),
+    ]
+    
+    # We pass the entry.entry_id as a backup unique ID
+    async_add_entities(
+        [ClassChartsMultiSensor(coordinator, entry.entry_id, s[0], s[1], s[2]) for s in sensors], 
+        True
+    )
 
-# --- 1, 2, 3: HOMEWORK SENSORS ---
-class CCHomeworkOutstanding(CoordinatorEntity, SensorEntity):
-    def __init__(self, coordinator):
+class ClassChartsMultiSensor(CoordinatorEntity, SensorEntity):
+    """A generic sensor class that branches into 6 different types."""
+
+    def __init__(self, coordinator, entry_id, sensor_type, name, icon):
         super().__init__(coordinator)
-        self._attr_name = "Homework Outstanding This Week"
-        self._attr_unique_id = f"{coordinator.pupil_id}_hw_outstanding_v4"
-        self._attr_native_unit_of_measurement = "Tasks"
-        self._attr_icon = "mdi:alert-circle-outline"
+        self._type = sensor_type
+        self._attr_name = name
+        self._attr_icon = icon
+        
+        # FIX: We use entry_id instead of pupil_id to prevent the 'AttributeError'
+        self._attr_unique_id = f"{entry_id}_{sensor_type}_v6"
+        
+        # Set units only for homework sensors
+        if "Homework" in name:
+            self._attr_native_unit_of_measurement = "Tasks"
 
     @property
     def native_value(self):
-        data = self.coordinator.data.get("homework", {}).get("data", [])
-        now = datetime.now()
-        end_of_week = (now + timedelta(days=6 - now.weekday())).replace(hour=23, minute=59, second=59)
-        return sum(1 for hw in data if hw.get("status", {}).get("ticked") != "yes" and 
-                   datetime.strptime(hw.get("due_date"), "%Y-%m-%d") <= end_of_week)
+        """The core logic for all 6 sensors."""
+        data = self.coordinator.data
+        if not data:
+            return None
 
-class CCHomeworkCompleted(CoordinatorEntity, SensorEntity):
-    def __init__(self, coordinator):
-        super().__init__(coordinator)
-        self._attr_name = "Homework Completed This Week"
-        self._attr_unique_id = f"{coordinator.pupil_id}_hw_completed_v4"
-        self._attr_native_unit_of_measurement = "Tasks"
-        self._attr_icon = "mdi:check-circle-outline"
+        # --- HOMEWORK LOGIC ---
+        if self._type in ["outstanding", "completed", "due_total"]:
+            # Check if homework is nested or direct
+            hw_root = data.get("homework", data)
+            hw_items = hw_root.get("data", []) if isinstance(hw_root, dict) else []
+            
+            now = datetime.now()
+            end_of_week = (now + timedelta(days=6 - now.weekday())).replace(hour=23, minute=59, second=59)
+            
+            total = 0
+            done = 0
+            todo = 0
+            
+            for hw in hw_items:
+                try:
+                    due = datetime.strptime(hw.get("due_date"), "%Y-%m-%d")
+                    if due <= end_of_week:
+                        total += 1
+                        if hw.get("status", {}).get("ticked") == "yes":
+                            done += 1
+                        else:
+                            todo += 1
+                except: continue
+                
+            if self._type == "outstanding": return todo
+            if self._type == "completed": return done
+            return total
 
-    @property
-    def native_value(self):
-        data = self.coordinator.data.get("homework", {}).get("data", [])
-        now = datetime.now()
-        end_of_week = (now + timedelta(days=6 - now.weekday())).replace(hour=23, minute=59, second=59)
-        return sum(1 for hw in data if hw.get("status", {}).get("ticked") == "yes" and 
-                   datetime.strptime(hw.get("due_date"), "%Y-%m-%d") <= end_of_week)
+        # --- TIMETABLE LOGIC ---
+        timetable = data.get("timetable", [])
+        if self._type == "timetable":
+            return len(timetable)
+            
+        if not timetable: return "No Lessons Today"
+        
+        if self._type == "current":
+            first_lesson = timetable[0]
+            return first_lesson.get("subject", {}).get("name", "Unknown")
+        
+        if self._type == "next":
+            if len(timetable) > 1:
+                return timetable[1].get("subject", {}).get("name", "Unknown")
+            return "No More Lessons"
 
-class CCHomeworkTotal(CoordinatorEntity, SensorEntity):
-    def __init__(self, coordinator):
-        super().__init__(coordinator)
-        self._attr_name = "Homework Total Due This Week"
-        self._attr_unique_id = f"{coordinator.pupil_id}_hw_total_v4"
-        self._attr_native_unit_of_measurement = "Tasks"
-        self._attr_icon = "mdi:book-open-variant"
-
-    @property
-    def native_value(self):
-        data = self.coordinator.data.get("homework", {}).get("data", [])
-        now = datetime.now()
-        end_of_week = (now + timedelta(days=6 - now.weekday())).replace(hour=23, minute=59, second=59)
-        return sum(1 for hw in data if datetime.strptime(hw.get("due_date"), "%Y-%m-%d") <= end_of_week)
-
-# --- 4: TIMETABLE SENSOR ---
-class CCTimetableMain(CoordinatorEntity, SensorEntity):
-    def __init__(self, coordinator):
-        super().__init__(coordinator)
-        self._attr_name = "Class Charts Timetable"
-        self._attr_unique_id = f"{coordinator.pupil_id}_timetable_v4"
-        self._attr_icon = "mdi:calendar-clock"
-
-    @property
-    def native_value(self):
-        return len(self.coordinator.data.get("timetable", []))
-
-# --- 5: CURRENT LESSON ---
-class CCCurrentLesson(CoordinatorEntity, SensorEntity):
-    def __init__(self, coordinator):
-        super().__init__(coordinator)
-        self._attr_name = "Class Charts Current Lesson"
-        self._attr_unique_id = f"{coordinator.pupil_id}_current_lesson_v4"
-        self._attr_icon = "mdi:school-outline"
-
-    @property
-    def native_value(self):
-        lessons = self.coordinator.data.get("timetable", [])
-        if not lessons: return "No Lesson"
-        # Usually, the first lesson in the list is the current one during school hours
-        return lessons[0].get("subject", {}).get("name", "Unknown")
-
-# --- 6: NEXT LESSON ---
-class CCNextLesson(CoordinatorEntity, SensorEntity):
-    def __init__(self, coordinator):
-        super().__init__(coordinator)
-        self._attr_name = "Class Charts Next Lesson"
-        self._attr_unique_id = f"{coordinator.pupil_id}_next_lesson_v4"
-        self._attr_icon = "mdi:school"
-
-    @property
-    def native_value(self):
-        lessons = self.coordinator.data.get("timetable", [])
-        # If there are 2 or more lessons, the second one (index 1) is the "next" one
-        if len(lessons) < 2: return "No More Lessons"
-        return lessons[1].get("subject", {}).get("name", "Unknown")
+        return None
