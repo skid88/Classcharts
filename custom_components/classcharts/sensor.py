@@ -11,9 +11,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
     
     # This list defines the 6 unique sensors
     sensor_definitions = [
-        ("outstanding", "Homework Outstanding This Week", "mdi:alert-circle-outline"),
-        ("completed", "Homework Completed This Week", "mdi:check-circle-outline"),
-        ("due_total", "Homework Total Due This Week", "mdi:book-open-variant"),
+        ("outstanding", "Homework Outstanding", "mdi:alert-circle-outline"),
+        ("completed", "Homework Completed", "mdi:check-circle-outline"),
+        ("due_total", "Homework Due", "mdi:book-open-variant"),
         ("timetable_count", "Class Charts Timetable", "mdi:calendar-clock"),
         ("current_lesson", "Class Charts Current Lesson", "mdi:school-outline"),
         ("next_lesson", "Class Charts Next Lesson", "mdi:school"),
