@@ -6,10 +6,9 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Set up all 6 Class Charts sensors with unique classes."""
+    """Set up all 6 Class Charts sensors with safety checks."""
     coordinator = hass.data["classcharts"][entry.entry_id]
     
-    # Each sensor using its own specific class to prevent "merging"
     async_add_entities([
         CCHomeworkOutstanding(coordinator, entry.entry_id),
         CCHomeworkCompleted(coordinator, entry.entry_id),
@@ -24,7 +23,7 @@ class CCHomeworkOutstanding(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry_id):
         super().__init__(coordinator)
         self._attr_name = "Homework Outstanding"
-        self._attr_unique_id = f"{entry_id}_outstanding_v8_final"
+        self._attr_unique_id = f"{entry_id}_outstanding_v11"
         self._attr_icon = "mdi:alert-circle-outline"
         self._attr_native_unit_of_measurement = "Tasks"
 
@@ -34,15 +33,23 @@ class CCHomeworkOutstanding(CoordinatorEntity, SensorEntity):
         items = hw_root.get("data", []) if isinstance(hw_root, dict) else []
         now = datetime.now()
         end_of_week = (now + timedelta(days=6 - now.weekday())).replace(hour=23, minute=59, second=59)
-        return sum(1 for hw in items if hw.get("status", {}).get("ticked") != "yes" and 
-                   datetime.strptime(hw.get("due_date"), "%Y-%m-%d") <= end_of_week)
+        
+        count = 0
+        for hw in items:
+            if hw.get("status", {}).get("ticked") != "yes":
+                try:
+                    due_date = datetime.strptime(hw.get("due_date")[:10], "%Y-%m-%d")
+                    if due_date <= end_of_week:
+                        count += 1
+                except: continue
+        return count
 
 # --- 2. COMPLETED ---
 class CCHomeworkCompleted(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry_id):
         super().__init__(coordinator)
         self._attr_name = "Homework Completed"
-        self._attr_unique_id = f"{entry_id}_completed_v8_final"
+        self._attr_unique_id = f"{entry_id}_completed_v11"
         self._attr_icon = "mdi:check-circle-outline"
         self._attr_native_unit_of_measurement = "Tasks"
 
@@ -52,15 +59,23 @@ class CCHomeworkCompleted(CoordinatorEntity, SensorEntity):
         items = hw_root.get("data", []) if isinstance(hw_root, dict) else []
         now = datetime.now()
         end_of_week = (now + timedelta(days=6 - now.weekday())).replace(hour=23, minute=59, second=59)
-        return sum(1 for hw in items if hw.get("status", {}).get("ticked") == "yes" and 
-                   datetime.strptime(hw.get("due_date"), "%Y-%m-%d") <= end_of_week)
+        
+        count = 0
+        for hw in items:
+            if hw.get("status", {}).get("ticked") == "yes":
+                try:
+                    due_date = datetime.strptime(hw.get("due_date")[:10], "%Y-%m-%d")
+                    if due_date <= end_of_week:
+                        count += 1
+                except: continue
+        return count
 
 # --- 3. TOTAL DUE ---
 class CCHomeworkTotal(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry_id):
         super().__init__(coordinator)
         self._attr_name = "Homework Total Due"
-        self._attr_unique_id = f"{entry_id}_total_due_v8_final"
+        self._attr_unique_id = f"{entry_id}_total_due_v11"
         self._attr_icon = "mdi:book-open-variant"
         self._attr_native_unit_of_measurement = "Tasks"
 
@@ -70,44 +85,56 @@ class CCHomeworkTotal(CoordinatorEntity, SensorEntity):
         items = hw_root.get("data", []) if isinstance(hw_root, dict) else []
         now = datetime.now()
         end_of_week = (now + timedelta(days=6 - now.weekday())).replace(hour=23, minute=59, second=59)
-        return sum(1 for hw in items if datetime.strptime(hw.get("due_date"), "%Y-%m-%d") <= end_of_week)
+        
+        count = 0
+        for hw in items:
+            try:
+                due_date = datetime.strptime(hw.get("due_date")[:10], "%Y-%m-%d")
+                if due_date <= end_of_week:
+                    count += 1
+            except: continue
+        return count
 
 # --- 4. TIMETABLE ---
 class CCTimetableMain(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry_id):
         super().__init__(coordinator)
         self._attr_name = "Class Charts Timetable"
-        self._attr_unique_id = f"{entry_id}_timetable_v8_final"
+        self._attr_unique_id = f"{entry_id}_timetable_v11"
         self._attr_icon = "mdi:calendar-clock"
 
     @property
     def native_value(self):
         return len(self.coordinator.data.get("timetable", []))
 
-# --- 5. CURRENT LESSON ---
+# --- 5. CURRENT LESSON (FIXED) ---
 class CCCurrentLesson(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry_id):
         super().__init__(coordinator)
         self._attr_name = "Class Charts Current Lesson"
-        self._attr_unique_id = f"{entry_id}_current_v8_final"
+        self._attr_unique_id = f"{entry_id}_current_v11"
         self._attr_icon = "mdi:school-outline"
 
     @property
     def native_value(self):
         lessons = self.coordinator.data.get("timetable", [])
-        if not lessons: return "No Lesson"
+        # FIX: Check if the list has at least one item before looking at index 0
+        if not lessons or len(lessons) == 0:
+            return "No Lessons Today"
         return lessons[0].get("subject", {}).get("name", "Unknown")
 
-# --- 6. NEXT LESSON ---
+# --- 6. NEXT LESSON (FIXED) ---
 class CCNextLesson(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry_id):
         super().__init__(coordinator)
         self._attr_name = "Class Charts Next Lesson"
-        self._attr_unique_id = f"{entry_id}_next_v8_final"
+        self._attr_unique_id = f"{entry_id}_next_v11"
         self._attr_icon = "mdi:school"
 
     @property
     def native_value(self):
         lessons = self.coordinator.data.get("timetable", [])
-        if len(lessons) < 2: return "No More Lessons"
+        # FIX: Check if the list has at least two items before looking at index 1
+        if not lessons or len(lessons) < 2:
+            return "No More Lessons"
         return lessons[1].get("subject", {}).get("name", "Unknown")
