@@ -11,13 +11,8 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up Class Charts sensors."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    
-    # Get the pupil_id from the config entry to pass to the sensors
     pupil_id = entry.data.get(CONF_PUPIL_ID)
     
-    _LOGGER.debug("Registering Class Charts sensors for entry: %s", entry.entry_id)
-    
-    # We pass the coordinator AND pupil_id to all sensors to ensure unique_ids are consistent
     async_add_entities([
         ClassChartsLessonSensor(coordinator, "Current Lesson", "current", pupil_id),
         ClassChartsLessonSensor(coordinator, "Next Lesson", "next", pupil_id),
@@ -40,10 +35,6 @@ class ClassChartsLessonSensor(CoordinatorEntity, SensorEntity):
             return "No Data"
 
         timetable = self.coordinator.data.get("timetable", {})
-        
-        if not isinstance(timetable, dict):
-            return "Data Error"
-
         now = dt_util.now()
         lessons = []
 
@@ -106,25 +97,36 @@ class ClassChartsHomeworkSensor(CoordinatorEntity, SensorEntity):
         """Return the count of homework tasks."""
         data = self.coordinator.data.get("homework", {})
         tasks = data.get("data", [])
-        
-        if isinstance(tasks, list):
-            return len(tasks)
-        return 0
+        return len(tasks) if isinstance(tasks, list) else 0
 
     @property
     def extra_state_attributes(self):
-        """Return the detailed list of tasks as attributes."""
+        """Return the detailed list of tasks."""
         data = self.coordinator.data.get("homework", {})
         tasks = data.get("data", [])
         
         homework_list = []
         if isinstance(tasks, list):
             for hw in tasks:
+                # FIX: Check if subject is a dict before calling .get()
+                subject_data = hw.get("subject")
+                if isinstance(subject_data, dict):
+                    subject_name = subject_data.get("name", "Unknown")
+                else:
+                    subject_name = str(subject_data) if subject_data else "Unknown"
+                
+                # FIX: Same check for status
+                status_data = hw.get("status")
+                if isinstance(status_data, dict):
+                    status_state = status_data.get("state", "Unknown")
+                else:
+                    status_state = str(status_data) if status_data else "Unknown"
+
                 homework_list.append({
                     "title": hw.get("title"),
-                    "subject": hw.get("subject", {}).get("name"),
+                    "subject": subject_name,
                     "due": hw.get("due_date"),
-                    "status": hw.get("status", {}).get("state")
+                    "status": status_state
                 })
             
         return {
