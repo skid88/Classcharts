@@ -21,77 +21,56 @@ async def async_setup_entry(hass, entry, async_add_entities):
     
     async_add_entities(entities, True)
 
+# --- 1. OUTSTANDING HOMEWORK (Direct API Map) ---
 class CCHomeworkOutstanding(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry_id):
         super().__init__(coordinator)
         self._attr_name = "Homework Outstanding"
-        self._attr_unique_id = f"{entry_id}_hw_outstanding_v26"
+        self._attr_unique_id = f"{entry_id}_hw_outstanding_v28"
         self._attr_icon = "mdi:alert-circle-outline"
         self._attr_native_unit_of_measurement = "Tasks"
 
     @property
     def native_value(self):
         try:
-            # High-res debugging to find why data might be missing
-            data = self.coordinator.data
-            if not data or "homework" not in data:
-                return 0
-            
-            hw_root = data.get("homework", {})
-            items = hw_root.get("data", []) if isinstance(hw_root, dict) else []
-            
-            now = datetime.now()
-            # Calculate Sunday night 23:59:59
-            end_of_week = (now + timedelta(days=6 - now.weekday())).replace(hour=23, minute=59, second=59)
-            
-            count = 0
-            for hw in items:
-                # Double check the status exists
-                status = hw.get("status", {})
-                if status and status.get("ticked") != "yes":
-                    due_str = hw.get("due_date", "")
-                    if due_str:
-                        due_dt = datetime.strptime(due_str[:10], "%Y-%m-%d")
-                        if due_dt <= end_of_week:
-                            count += 1
-            return count
-        except Exception as e:
-            _LOGGER.error("Outstanding HW Sensor error: %s", e)
+            # Directly pulls "this_week_outstanding_count" from API
+            return self.coordinator.data.get("homework", {}).get("this_week_outstanding_count", 0)
+        except:
             return 0
 
-# --- 2. COMPLETED HOMEWORK ---
+# --- 2. COMPLETED HOMEWORK (Direct API Map) ---
 class CCHomeworkCompleted(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry_id):
         super().__init__(coordinator)
         self._attr_name = "Homework Completed"
-        self._attr_unique_id = f"{entry_id}_completed_v25"
+        self._attr_unique_id = f"{entry_id}_completed_v28"
         self._attr_icon = "mdi:check-circle-outline"
         self._attr_native_unit_of_measurement = "Tasks"
 
     @property
     def native_value(self):
         try:
-            hw_root = self.coordinator.data.get("homework", {})
-            items = hw_root.get("data", []) if isinstance(hw_root, dict) else []
-            return sum(1 for hw in items if hw.get("status", {}).get("ticked") == "yes")
-        except: return 0
+            # Directly pulls "this_week_completed_count" from API
+            return self.coordinator.data.get("homework", {}).get("this_week_completed_count", 0)
+        except:
+            return 0
 
-# --- 3. TOTAL HOMEWORK ---
+# --- 3. TOTAL HOMEWORK (Direct API Map) ---
 class CCHomeworkTotal(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry_id):
         super().__init__(coordinator)
         self._attr_name = "Homework Total Due"
-        self._attr_unique_id = f"{entry_id}_total_due_v25"
+        self._attr_unique_id = f"{entry_id}_total_due_v28"
         self._attr_icon = "mdi:book-open-variant"
         self._attr_native_unit_of_measurement = "Tasks"
 
     @property
     def native_value(self):
         try:
-            hw_root = self.coordinator.data.get("homework", {})
-            items = hw_root.get("data", []) if isinstance(hw_root, dict) else []
-            return len(items)
-        except: return 0
+            # Directly pulls "this_week_due_count" from API
+            return self.coordinator.data.get("homework", {}).get("this_week_due_count", 0)
+        except:
+            return 0
 
 # --- 4. TIMETABLE COUNT ---
 class CCTimetableMain(CoordinatorEntity, SensorEntity):
