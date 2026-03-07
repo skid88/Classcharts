@@ -11,7 +11,6 @@ from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from .const import (
     DOMAIN, 
     LOGIN_URL, 
-    PING_URL, 
     TIMETABLE_URL, 
     CONF_PUPIL_ID,
     CONF_REFRESH_INTERVAL,
@@ -19,36 +18,6 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Class Charts from a config entry."""
-    coordinator = ClassChartsCoordinator(hass, entry)
-    
-    await coordinator.async_config_entry_first_refresh()
-
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = coordinator
-
-    # This tells HA to look for sensor.py and calendar.py
-    await hass.config_entries.async_forward_entry_setups(entry, ["sensor", "calendar"])
-    
-    entry.async_on_unload(entry.add_update_listener(update_listener))
-    
-    return True
-
-async def update_listener(hass: HomeAssistant, entry: ConfigEntry):
-    """Handle options update."""
-    await hass.config_entries.async_reload(entry.entry_id)
-
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
-    # This specifically fixes the "Failed to unload" error
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, ["sensor", "calendar"])
-    
-    if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
-
-    return unload_ok
 
 def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
     """Fetch both Timetable and Homework data."""
@@ -89,13 +58,10 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
             if isinstance(day_data, dict):
                 lessons = day_data.get("data", [])
                 full_schedule[date_str] = lessons if isinstance(lessons, list) else []
-            elif isinstance(day_data, list):
-                full_schedule[date_str] = day_data
 
         # 3. Fetch Homework
         hw_from = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         hw_to = (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y-%m-%d")
-        
         hw_url = f"https://www.classcharts.com/apiv2parent/homeworks/{pupil_id}?display_date=due_date&from={hw_from}&to={hw_to}"
         
         hw_resp = session.get(
@@ -115,3 +81,53 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         return {}
     finally:
         session.close()
+
+class ClassChartsCoordinator(DataUpdateCoordinator):
+    """Class to manage fetching Class Charts data."""
+    def __init__(self, hass, entry):
+        self.refresh_interval = entry.options.get(CONF_REFRESH_INTERVAL, 24)
+        self.days_to_fetch = entry.options.get(CONF_DAYS_TO_FETCH, 7)
+
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=DOMAIN,
+            update_interval=timedelta(hours=self.refresh_interval),
+        )
+        self.entry = entry
+
+    async def _async_update_data(self):
+        """Fetch data from API."""
+        return await self.hass.async_add_executor_job(
+            sync_get_classcharts_data,
+            self.entry.data[CONF_EMAIL],
+            self.entry.data[CONF_PASSWORD],
+            self.entry.data[CONF_PUPIL_ID],
+            self.days_to_fetch
+        )
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up Class Charts from a config entry."""
+    coordinator = ClassChartsCoordinator(hass, entry)
+    
+    await coordinator.async_config_entry_first_refresh()
+
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][entry.entry_id] = coordinator
+
+    await hass.config_entries.async_forward_entry_setups(entry, ["sensor", "calendar"])
+    
+    entry.async_on_unload(entry.add_update_listener(update_listener))
+    
+    return True
+
+async def update_listener(hass: HomeAssistant, entry: ConfigEntry):
+    """Handle options update."""
+    await hass.config_entries.async_reload(entry.entry_id)
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a config entry."""
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, ["sensor", "calendar"])
+    if unload_ok:
+        hass.data[DOMAIN].pop(entry.entry_id)
+    return unload_ok
