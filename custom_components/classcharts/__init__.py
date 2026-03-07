@@ -84,4 +84,34 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
                 headers={"Authorization": f"Basic {token}"},
                 timeout=10
             )
-            day
+            day_data = resp.json()
+            
+            if isinstance(day_data, dict):
+                lessons = day_data.get("data", [])
+                full_schedule[date_str] = lessons if isinstance(lessons, list) else []
+            elif isinstance(day_data, list):
+                full_schedule[date_str] = day_data
+
+        # 3. Fetch Homework
+        hw_from = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+        hw_to = (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y-%m-%d")
+        
+        hw_url = f"https://www.classcharts.com/apiv2parent/homeworks/{pupil_id}?display_date=due_date&from={hw_from}&to={hw_to}"
+        
+        hw_resp = session.get(
+            hw_url,
+            headers={"Authorization": f"Basic {token}"},
+            timeout=10
+        )
+        homework_data = hw_resp.json()
+
+        return {
+            "timetable": full_schedule,
+            "homework": homework_data
+        }
+
+    except Exception as err:
+        _LOGGER.error("Class Charts Sync Error: %s", err)
+        return {}
+    finally:
+        session.close()
