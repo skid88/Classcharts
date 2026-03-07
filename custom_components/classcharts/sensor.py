@@ -6,9 +6,13 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Set up all Class Charts sensors (Homework, Timetable, Lessons)."""
+    """Set up all Class Charts sensors."""
+    # IMPORTANT: Check if your domain is 'classcharts' or 'class_charts' in __init__.py
+    # If the sensor is still 'unavailable', try changing this key:
     coordinator = hass.data["classcharts"][entry.entry_id]
     
+    _LOGGER.debug("Setting up Class Charts entities for %s", coordinator.pupil_id)
+
     entities = [
         ClassChartsHomeworkSensor(coordinator, "outstanding"),
         ClassChartsHomeworkSensor(coordinator, "completed"),
@@ -34,15 +38,19 @@ class ClassChartsHomeworkSensor(CoordinatorEntity, SensorEntity):
         }
         
         self._attr_name = names.get(sensor_type)
-        self._attr_unique_id = f"{self.pupil_id}_homework_{sensor_type}"
+        # We add _v2 to the ID to force Home Assistant to see these as brand new entities
+        self._attr_unique_id = f"{self.pupil_id}_hw_{sensor_type}_v2"
         self._attr_native_unit_of_measurement = "Tasks"
         self._attr_icon = "mdi:book-open-variant"
 
     @property
     def native_value(self):
-        # We look inside the 'homework' key of the coordinator data
+        # We try both common data paths used in this integration
         hw_data = self.coordinator.data.get("homework", {})
-        data = hw_data.get("data", []) if isinstance(hw_data, dict) else []
+        if isinstance(hw_data, dict):
+            data = hw_data.get("data", [])
+        else:
+            data = self.coordinator.data.get("data", [])
         
         now = datetime.now()
         end_of_week = (now + timedelta(days=6 - now.weekday())).replace(hour=23, minute=59, second=59)
@@ -72,7 +80,7 @@ class ClassChartsTimetableSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator):
         super().__init__(coordinator)
         self._attr_name = "Class Charts Timetable"
-        self._attr_unique_id = f"{coordinator.pupil_id}_timetable"
+        self._attr_unique_id = f"{coordinator.pupil_id}_timetable_v2"
         self._attr_icon = "mdi:calendar-clock"
 
     @property
@@ -90,7 +98,7 @@ class ClassChartsLessonSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator):
         super().__init__(coordinator)
         self._attr_name = "Class Charts Next Lesson"
-        self._attr_unique_id = f"{coordinator.pupil_id}_next_lesson"
+        self._attr_unique_id = f"{coordinator.pupil_id}_next_lesson_v2"
         self._attr_icon = "mdi:school"
 
     @property
@@ -99,6 +107,9 @@ class ClassChartsLessonSensor(CoordinatorEntity, SensorEntity):
         if not lessons or not isinstance(lessons, list): 
             return "No Lessons"
         
-        # Get the name of the first lesson in the list
         first_lesson = lessons[0]
-        return first_lesson.get("subject", {}).get("name", "Unknown Subject")
+        # Handles structure where 'subject' might be a dict or a string
+        subject = first_lesson.get("subject", {})
+        if isinstance(subject, dict):
+            return subject.get("name", "Unknown Subject")
+        return str(subject)
