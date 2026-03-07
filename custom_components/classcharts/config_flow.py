@@ -61,7 +61,7 @@ class ClassChartsOptionsFlowHandler(config_entries.OptionsFlow):
                 ): int,
                 vol.Optional(
                     CONF_DAYS_TO_FETCH,
-                    default=self.config_entry.options.get(CONF_DAYS_TO_FETCH, 7),
+                    default=self.config_entry.options.get(CONF_DAYS_TO_FETCH, 14),
                 ): int,
             }),
         )
