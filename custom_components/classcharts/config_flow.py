@@ -42,26 +42,26 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class ClassChartsOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Class Charts settings."""
 
-    def __init__(self, config_entry):
-        """Initialize options flow."""
-        self.config_entry = config_entry
+    # Note: We removed __init__ entirely because HA 2024.1+ handles it automatically
 
     async def async_step_init(self, user_input=None):
         """Manage the actual settings menu."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        # This defines what you see when you click the Cog
+        # We use self.config_entry directly as it's provided by the base class
+        options = self.config_entry.options
+
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
                 vol.Optional(
                     CONF_REFRESH_INTERVAL,
-                    default=self.config_entry.options.get(CONF_REFRESH_INTERVAL, 24),
+                    default=options.get(CONF_REFRESH_INTERVAL, 24),
                 ): int,
                 vol.Optional(
                     CONF_DAYS_TO_FETCH,
-                    default=self.config_entry.options.get(CONF_DAYS_TO_FETCH, 14),
+                    default=options.get(CONF_DAYS_TO_FETCH, 14),
                 ): int,
             }),
         )
