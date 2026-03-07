@@ -9,35 +9,39 @@ async def async_setup_entry(hass, entry, async_add_entities):
     """Set up all 6 Class Charts sensors via a dynamic list."""
     coordinator = hass.data["classcharts"][entry.entry_id]
     
-    # We define the sensors here with distinct 'type' tags
-    sensors = [
+    # This list defines the 6 unique sensors
+    sensor_definitions = [
         ("outstanding", "Homework Outstanding This Week", "mdi:alert-circle-outline"),
         ("completed", "Homework Completed This Week", "mdi:check-circle-outline"),
         ("due_total", "Homework Total Due This Week", "mdi:book-open-variant"),
-        ("timetable", "Class Charts Timetable", "mdi:calendar-clock"),
-        ("current", "Class Charts Current Lesson", "mdi:school-outline"),
-        ("next", "Class Charts Next Lesson", "mdi:school"),
+        ("timetable_count", "Class Charts Timetable", "mdi:calendar-clock"),
+        ("current_lesson", "Class Charts Current Lesson", "mdi:school-outline"),
+        ("next_lesson", "Class Charts Next Lesson", "mdi:school"),
     ]
     
-    # We pass the entry.entry_id as a backup unique ID
-    async_add_entities(
-        [ClassChartsMultiSensor(coordinator, entry.entry_id, s[0], s[1], s[2]) for s in sensors], 
-        True
-    )
+    entities = []
+    for sensor_type, name, icon in sensor_definitions:
+        entities.append(ClassChartsMultiSensor(coordinator, entry.entry_id, sensor_type, name, icon))
+    
+    async_add_entities(entities, True)
 
 class ClassChartsMultiSensor(CoordinatorEntity, SensorEntity):
-    """A generic sensor class that branches into 6 different types."""
+    """A generic sensor class for all Class Charts data types."""
 
     def __init__(self, coordinator, entry_id, sensor_type, name, icon):
         super().__init__(coordinator)
         self._type = sensor_type
-        self._attr_name = name
+        self._name = name
+        self._icon = icon
+        
+        # We use a very specific Unique ID to force them to be separate
+        self._attr_unique_id = f"cc_{entry_id}_{sensor_type}_v7"
         self._attr_icon = icon
         
-        # FIX: We use entry_id instead of pupil_id to prevent the 'AttributeError'
-        self._attr_unique_id = f"{entry_id}_{sensor_type}_v6"
-        
-        # Set units only for homework sensors
+        # This tells HA to use the name we provide exactly
+        self._attr_name = name
+        self._attr_has_entity_name = False 
+
         if "Homework" in name:
             self._attr_native_unit_of_measurement = "Tasks"
 
@@ -50,7 +54,6 @@ class ClassChartsMultiSensor(CoordinatorEntity, SensorEntity):
 
         # --- HOMEWORK LOGIC ---
         if self._type in ["outstanding", "completed", "due_total"]:
-            # Check if homework is nested or direct
             hw_root = data.get("homework", data)
             hw_items = hw_root.get("data", []) if isinstance(hw_root, dict) else []
             
@@ -78,18 +81,15 @@ class ClassChartsMultiSensor(CoordinatorEntity, SensorEntity):
 
         # --- TIMETABLE LOGIC ---
         timetable = data.get("timetable", [])
-        if self._type == "timetable":
+        if self._type == "timetable_count":
             return len(timetable)
             
-        if not timetable: return "No Lessons Today"
+        if not timetable: return "No Lessons"
         
-        if self._type == "current":
-            first_lesson = timetable[0]
-            return first_lesson.get("subject", {}).get("name", "Unknown")
+        if self._type == "current_lesson":
+            return timetable[0].get("subject", {}).get("name", "Unknown")
         
-        if self._type == "next":
-            if len(timetable) > 1:
-                return timetable[1].get("subject", {}).get("name", "Unknown")
-            return "No More Lessons"
+        if self._type == "next_lesson":
+            return timetable[1].get("subject", {}).get("name", "Unknown") if len(timetable) > 1 else "No More Lessons"
 
         return None
