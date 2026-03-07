@@ -42,14 +42,18 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class ClassChartsOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Class Charts settings."""
 
-    # Note: We removed __init__ entirely because HA 2024.1+ handles it automatically
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        # We do NOT set self.config_entry manually. 
+        # The base class (OptionsFlow) handles it.
+        super().__init__()
 
     async def async_step_init(self, user_input=None):
         """Manage the actual settings menu."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        # We use self.config_entry directly as it's provided by the base class
+        # Access config_entry through the property provided by the base class
         options = self.config_entry.options
 
         return self.async_show_form(
