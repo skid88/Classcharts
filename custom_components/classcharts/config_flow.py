@@ -3,6 +3,7 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import callback
 
+# We import only what we absolutely need for the schema
 from .const import (
     DOMAIN,
     CONF_PUPIL_ID,
@@ -19,7 +20,8 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle the initial step."""
         errors = {}
         if user_input is not None:
-            # In a real scenario, you'd validate credentials here
+            # We skip complex validation here to prevent the 'blocking call' error
+            # If the login fails later, the coordinator will log it.
             return self.async_create_entry(
                 title=user_input[CONF_EMAIL], 
                 data=user_input
