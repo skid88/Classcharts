@@ -21,57 +21,62 @@ async def async_setup_entry(hass, entry, async_add_entities):
     
     async_add_entities(entities, True)
 
-# --- 1. OUTSTANDING HOMEWORK (Direct API Map) ---
+# --- 1. OUTSTANDING HOMEWORK (Meta Map) ---
 class CCHomeworkOutstanding(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry_id):
         super().__init__(coordinator)
         self._attr_name = "Homework Outstanding"
-        self._attr_unique_id = f"{entry_id}_hw_outstanding_v28"
+        self._attr_unique_id = f"{entry_id}_hw_outstanding_v30"
         self._attr_icon = "mdi:alert-circle-outline"
         self._attr_native_unit_of_measurement = "Tasks"
 
     @property
     def native_value(self):
         try:
-            # Directly pulls "this_week_outstanding_count" from API
-            return self.coordinator.data.get("homework", {}).get("this_week_outstanding_count", 0)
-        except:
+            # Drills into homework -> meta -> this_week_outstanding_count
+            hw_data = self.coordinator.data.get("homework", {})
+            meta = hw_data.get("meta", {})
+            return meta.get("this_week_outstanding_count", 0)
+        except Exception:
             return 0
 
-# --- 2. COMPLETED HOMEWORK (Direct API Map) ---
+# --- 2. COMPLETED HOMEWORK (Meta Map) ---
 class CCHomeworkCompleted(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry_id):
         super().__init__(coordinator)
         self._attr_name = "Homework Completed"
-        self._attr_unique_id = f"{entry_id}_completed_v28"
+        self._attr_unique_id = f"{entry_id}_completed_v30"
         self._attr_icon = "mdi:check-circle-outline"
         self._attr_native_unit_of_measurement = "Tasks"
 
     @property
     def native_value(self):
         try:
-            # Directly pulls "this_week_completed_count" from API
-            return self.coordinator.data.get("homework", {}).get("this_week_completed_count", 0)
-        except:
+            # Drills into homework -> meta -> this_week_completed_count
+            hw_data = self.coordinator.data.get("homework", {})
+            meta = hw_data.get("meta", {})
+            return meta.get("this_week_completed_count", 0)
+        except Exception:
             return 0
 
-# --- 3. TOTAL HOMEWORK (Direct API Map) ---
+# --- 3. TOTAL HOMEWORK (Meta Map) ---
 class CCHomeworkTotal(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry_id):
         super().__init__(coordinator)
         self._attr_name = "Homework Total Due"
-        self._attr_unique_id = f"{entry_id}_total_due_v28"
+        self._attr_unique_id = f"{entry_id}_total_due_v30"
         self._attr_icon = "mdi:book-open-variant"
         self._attr_native_unit_of_measurement = "Tasks"
 
     @property
     def native_value(self):
         try:
-            # Directly pulls "this_week_due_count" from API
-            return self.coordinator.data.get("homework", {}).get("this_week_due_count", 0)
-        except:
+            # Drills into homework -> meta -> this_week_due_count
+            hw_data = self.coordinator.data.get("homework", {})
+            meta = hw_data.get("meta", {})
+            return meta.get("this_week_due_count", 0)
+        except Exception:
             return 0
-
 # --- 4. TIMETABLE COUNT ---
 class CCTimetableMain(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry_id):
