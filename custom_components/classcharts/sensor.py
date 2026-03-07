@@ -10,18 +10,16 @@ async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data["classcharts"][entry.entry_id]
     
     entities = [
-        # The 3 Homework Sensors we built
         ClassChartsHomeworkSensor(coordinator, "outstanding"),
         ClassChartsHomeworkSensor(coordinator, "completed"),
         ClassChartsHomeworkSensor(coordinator, "due_total"),
-        # The Timetable and Lesson Sensors
         ClassChartsTimetableSensor(coordinator),
         ClassChartsLessonSensor(coordinator)
     ]
     
     async_add_entities(entities, True)
 
-# --- HOMEWORK SENSOR CLASS ---
+# --- HOMEWORK SENSOR ---
 class ClassChartsHomeworkSensor(CoordinatorEntity, SensorEntity):
     """Sensor for Homework metrics."""
     def __init__(self, coordinator, sensor_type):
@@ -42,7 +40,10 @@ class ClassChartsHomeworkSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
-        data = self.coordinator.data.get("homework", {}).get("data", [])
+        # We look inside the 'homework' key of the coordinator data
+        hw_data = self.coordinator.data.get("homework", {})
+        data = hw_data.get("data", []) if isinstance(hw_data, dict) else []
+        
         now = datetime.now()
         end_of_week = (now + timedelta(days=6 - now.weekday())).replace(hour=23, minute=59, second=59)
 
@@ -65,7 +66,7 @@ class ClassChartsHomeworkSensor(CoordinatorEntity, SensorEntity):
         if self.sensor_type == "completed": return completed
         return total
 
-# --- TIMETABLE SENSOR CLASS ---
+# --- TIMETABLE SENSOR ---
 class ClassChartsTimetableSensor(CoordinatorEntity, SensorEntity):
     """Sensor for the Daily Timetable."""
     def __init__(self, coordinator):
@@ -76,7 +77,6 @@ class ClassChartsTimetableSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
-        # Returns the number of lessons today
         timetable = self.coordinator.data.get("timetable", [])
         return len(timetable)
 
@@ -84,7 +84,7 @@ class ClassChartsTimetableSensor(CoordinatorEntity, SensorEntity):
     def extra_state_attributes(self):
         return {"lessons": self.coordinator.data.get("timetable", [])}
 
-# --- LESSON SENSOR CLASS ---
+# --- LESSON SENSOR ---
 class ClassChartsLessonSensor(CoordinatorEntity, SensorEntity):
     """Sensor for the Next/Current Lesson."""
     def __init__(self, coordinator):
@@ -95,7 +95,10 @@ class ClassChartsLessonSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
-        # Logic to find the current/next lesson from timetable data
         lessons = self.coordinator.data.get("timetable", [])
-        if not lessons: return "No Lessons"
-        return lessons[0].get("subject", {}).get("name", "Unknown")
+        if not lessons or not isinstance(lessons, list): 
+            return "No Lessons"
+        
+        # Get the name of the first lesson in the list
+        first_lesson = lessons[0]
+        return first_lesson.get("subject", {}).get("name", "Unknown Subject")
