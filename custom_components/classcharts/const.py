@@ -8,7 +8,7 @@ LOGIN_URL = f"{BASE_URL}/login"
 PING_URL = f"{BASE_URL}/ping"      # <--- Added for revalidation
 PUPILS_URL = f"{BASE_URL}/pupils"
 TIMETABLE_URL = f"{BASE_URL}/timetable"
-HOMEWORK_URL = "https://www.classcharts.com/apiv2parent/homeworks"
+HOMEWORK_URL = f"{BASE_URL}/homeworks"
 
 # Configuration Keys
 CONF_PUPIL_ID = "pupil_id"
