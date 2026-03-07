@@ -64,6 +64,7 @@ A professional custom integration that brings your **Class Charts** school timet
 
 ---
  ![Screenshot](https://github.com/skid88/Classcharts/blob/main/Timetable.png)
+ ![Screenshot](https://github.com/skid88/Classcharts/blob/main/homework.png)
 
 ---
 
@@ -74,6 +75,7 @@ If you encounter any issues or have feature requests, please open an [Issue](htt
 
 ## 📝 License
 This project is for personal use and is not an official Class Charts product.
+
 
 
 
