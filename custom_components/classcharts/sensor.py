@@ -15,66 +15,69 @@ class ClassChartsHomeworkSensor(CoordinatorEntity, SensorEntity):
         self._attr_unique_id = f"{coordinator.pupil_id}_homework"
         self._attr_native_unit_of_measurement = "Tasks"
         self._attr_icon = "mdi:book-open-variant"
+        # Initialize internal storage to prevent None errors
+        self._state_data = {}
 
-    @property
-    def extra_state_attributes(self):
-        """Return the state attributes."""
+    def _update_internal_state(self):
+        """Calculate all homework metrics once."""
         data = self.coordinator.data
         if not data or "data" not in data:
-            return {}
+            return {
+                "this_week_due_count": 0,
+                "this_week_outstanding_count": 0,
+                "this_week_completed_count": 0,
+                "tasks": []
+            }
 
         homework_items = data.get("data", [])
-        
-        # Date Logic
         now = datetime.now()
-        # Calculate the end of the current week (Sunday night)
+        # End of current week (Sunday night)
         end_of_week = (now + timedelta(days=6 - now.weekday())).replace(hour=23, minute=59, second=59)
         
-        this_week_due_count = 0
-        this_week_outstanding_count = 0
-        this_week_completed_count = 0
-        all_outstanding_tasks = []
+        counts = {
+            "this_week_due_count": 0,
+            "this_week_outstanding_count": 0,
+            "this_week_completed_count": 0,
+            "tasks": [],
+            "last_synced": now.strftime("%Y-%m-%d %H:%M:%S")
+        }
 
         for hw in homework_items:
-            # 1. Status Check (Based on your API dump)
             status = hw.get("status", {})
             is_ticked = status.get("ticked") == "yes"
             
-            # 2. Date Parsing
             due_date_str = hw.get("due_date")
             try:
                 due_date = datetime.strptime(due_date_str, "%Y-%m-%d")
             except (ValueError, TypeError):
                 continue
 
-            # 3. Categorization
-            # Logic: If it's due before or on the end of this Sunday
+            # Check if due by end of Sunday
             if due_date <= end_of_week:
-                this_week_due_count += 1
+                counts["this_week_due_count"] += 1
                 if is_ticked:
-                    this_week_completed_count += 1
+                    counts["this_week_completed_count"] += 1
                 else:
-                    this_week_outstanding_count += 1
+                    counts["this_week_outstanding_count"] += 1
 
-            # 4. Build the "Active Tasks" list for the UI
+            # Keep list of everything not ticked (even future stuff)
             if not is_ticked:
-                all_outstanding_tasks.append({
+                counts["tasks"].append({
                     "title": hw.get("title"),
                     "subject": hw.get("subject"),
                     "due_date": due_date_str,
                     "teacher": hw.get("teacher")
                 })
-
-        return {
-            "this_week_due_count": this_week_due_count,
-            "this_week_outstanding_count": this_week_outstanding_count,
-            "this_week_completed_count": this_week_completed_count,
-            "tasks": all_outstanding_tasks,
-            "last_synced": now.strftime("%Y-%m-%d %H:%M:%S")
-        }
+        
+        return counts
 
     @property
     def native_value(self):
-        """Return the state of the sensor (Total Outstanding)."""
-        # This will be the main number shown on the sensor card
-        return self.extra_state_attributes.get("this_week_outstanding_count", 0)
+        """Return the state (Outstanding tasks)."""
+        self._state_data = self._update_internal_state()
+        return self._state_data.get("this_week_outstanding_count", 0)
+
+    @property
+    def extra_state_attributes(self):
+        """Return the attributes calculated in native_value."""
+        return self._state_data
