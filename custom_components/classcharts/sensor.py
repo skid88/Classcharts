@@ -26,19 +26,41 @@ class CCHomeworkOutstanding(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry_id):
         super().__init__(coordinator)
         self._attr_name = "Homework Outstanding"
-        self._attr_unique_id = f"{entry_id}_hw_outstanding_v30"
-        self._attr_icon = "mdi:alert-circle-outline"
+        self._attr_unique_id = f"{entry_id}_hw_combined_v34"
+        self._attr_icon = "mdi:clipboard-list"
         self._attr_native_unit_of_measurement = "Tasks"
 
     @property
     def native_value(self):
+        """The main number shown on your dashboard."""
         try:
-            # Drills into homework -> meta -> this_week_outstanding_count
             hw_data = self.coordinator.data.get("homework", {})
-            meta = hw_data.get("meta", {})
-            return meta.get("this_week_outstanding_count", 0)
-        except Exception:
+            return hw_data.get("meta", {}).get("this_week_outstanding_count", 0)
+        except:
             return 0
+
+    @property
+    def extra_state_attributes(self):
+        """The 'Ultimate List' data stored inside this same sensor."""
+        try:
+            hw_items = self.coordinator.data.get("homework", {}).get("data", [])
+            tasks = []
+            for hw in hw_items:
+                # We filter to only include Outstanding tasks in this specific list
+                if hw.get("status", {}).get("ticked") != "yes":
+                    tasks.append({
+                        "subject": hw.get("subject", {}).get("name", "Unknown"),
+                        "title": hw.get("title", "No Title"),
+                        "due_date": hw.get("due_date", "")[:10],
+                        "teacher": hw.get("teacher", {}).get("name", "Unknown"),
+                        "lesson": hw.get("lesson", "N/A")
+                    })
+            
+            # Sort by due date
+            tasks.sort(key=lambda x: x["due_date"])
+            return {"tasks_list": tasks}
+        except Exception:
+            return {"tasks_list": []}
 
 # --- 2. COMPLETED HOMEWORK (Meta Map) ---
 class CCHomeworkCompleted(CoordinatorEntity, SensorEntity):
