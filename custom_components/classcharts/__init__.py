@@ -71,14 +71,20 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         )
         homework_data = hw_resp.json()
 
+        # --- THE FIX STARTS HERE ---
+        # Get today's date string to pull out just today's list for the sensors
+        today_str = datetime.date.today().strftime("%Y-%m-%d")
+
         return {
-            "timetable": full_schedule,
-            "homework": homework_data
+            "timetable": full_schedule.get(today_str, []), # Pass list, not dict
+            "homework": homework_data,
+            "full_schedule": full_schedule  # Optional: keep for calendar if needed
         }
+        # --- THE FIX ENDS HERE ---
 
     except Exception as err:
         _LOGGER.error("Class Charts Sync Error: %s", err)
-        return {}
+        return {"timetable": [], "homework": {}}
     finally:
         session.close()
 
