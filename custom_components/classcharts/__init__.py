@@ -19,6 +19,21 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+def _normalize_lesson(lesson):
+    if not isinstance(lesson, dict):
+        return {}
+    subject = lesson.get("subject") or {}
+    teacher = lesson.get("teacher") or {}
+    room = lesson.get("room") or {}
+    return {
+        "subject_name": lesson.get("subject_name") or subject.get("name"),
+        "teacher_name": lesson.get("teacher_name") or teacher.get("name"),
+        "room_name": lesson.get("room_name") or room.get("name"),
+        "start_time": lesson.get("start_time") or lesson.get("start"),
+        "end_time": lesson.get("end_time") or lesson.get("end"),
+        "raw": lesson,
+    }
+
 def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
     """Fetch both Timetable and Homework data."""
     session = requests.Session()
@@ -57,7 +72,12 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
             
             if isinstance(day_data, dict):
                 lessons = day_data.get("data", [])
-                full_schedule[date_str] = lessons if isinstance(lessons, list) else []
+                if isinstance(lessons, list):
+                    full_schedule[date_str] = [
+                        _normalize_lesson(lesson) for lesson in lessons
+                    ]
+                else:
+                    full_schedule[date_str] = []
 
         # 3. Fetch Homework
         hw_from = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
@@ -71,20 +91,14 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         )
         homework_data = hw_resp.json()
 
-        # --- THE FIX STARTS HERE ---
-        # Get today's date string to pull out just today's list for the sensors
-        today_str = datetime.date.today().strftime("%Y-%m-%d")
-
         return {
-            "timetable": full_schedule.get(today_str, []), # Pass list, not dict
-            "homework": homework_data,
-            "full_schedule": full_schedule  # Optional: keep for calendar if needed
+            "timetable": full_schedule,
+            "homework": homework_data
         }
-        # --- THE FIX ENDS HERE ---
 
     except Exception as err:
         _LOGGER.error("Class Charts Sync Error: %s", err)
-        return {"timetable": [], "homework": {}}
+        return None
     finally:
         session.close()
 
@@ -104,13 +118,16 @@ class ClassChartsCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         """Fetch data from API."""
-        return await self.hass.async_add_executor_job(
+        result = await self.hass.async_add_executor_job(
             sync_get_classcharts_data,
             self.entry.data[CONF_EMAIL],
             self.entry.data[CONF_PASSWORD],
             self.entry.data[CONF_PUPIL_ID],
             self.days_to_fetch
         )
+        if result is None:
+            return self.data or {}
+        return result
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Class Charts from a config entry."""
