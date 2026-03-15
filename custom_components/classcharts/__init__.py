@@ -106,8 +106,8 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
             "homework": homework_data
         }
 
-    except Exception as err:
-        _LOGGER.error("Class Charts Sync Error: %s", err)
+    except Exception:
+        _LOGGER.exception("Class Charts Sync Error")
         return None
     finally:
         session.close()
