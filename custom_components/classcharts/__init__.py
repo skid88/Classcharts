@@ -52,11 +52,16 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         )
         login_resp.raise_for_status()
         login_json = login_resp.json()
-        if not isinstance(login_json, dict):
-            _LOGGER.error("Login failed: Unexpected response format: %s", type(login_json))
-            return {}
-        _LOGGER.error("DEBUG MARKER: before token line")
-        token = login_json.get("meta", {}).get("session_id")
+
+# Hard guard for unexpected formats
+if isinstance(login_json, list):
+    _LOGGER.error("Login failed: list response: %s", login_json[:1])
+    return {}
+if not isinstance(login_json, dict):
+    _LOGGER.error("Login failed: Unexpected response format: %s", type(login_json))
+    return {}
+
+token = login_json.get("meta", {}).get("session_id")
 
         if not token:
             _LOGGER.error("Login failed: No session_id found.")
