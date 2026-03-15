@@ -52,11 +52,10 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         )
         login_resp.raise_for_status()
         login_json = login_resp.json()
-        _LOGGER.error("Login response status: %s", login_resp.status_code)
-        _LOGGER.error("Login response type: %s", type(login_json))
         if not isinstance(login_json, dict):
             _LOGGER.error("Login failed: Unexpected response format: %s", type(login_json))
             return {}
+        _LOGGER.error("DEBUG MARKER: before token line")
         token = login_json.get("meta", {}).get("session_id")
 
         if not token:
