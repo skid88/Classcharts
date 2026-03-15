@@ -73,6 +73,9 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
                 timeout=10
             )
             day_data = resp.json()
+            if not isinstance(day_data, dict):
+                _LOGGER.error("Timetable response not dict for %s: %s", date_str, type(day_data))
+                continue
             
             if isinstance(day_data, dict):
                 lessons = day_data.get("data", [])
@@ -94,6 +97,9 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
             timeout=10
         )
         homework_data = hw_resp.json()
+        if not isinstance(homework_data, dict):
+            _LOGGER.error("Homework response not dict: %s", type(homework_data))
+            homework_data = {}
 
         return {
             "timetable": full_schedule,
