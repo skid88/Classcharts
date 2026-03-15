@@ -50,18 +50,25 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
             timeout=10
         )
         login_resp.raise_for_status()
-        login_json = login_resp.json()
+        
+        try:
+            login_json = login_resp.json()
+        except ValueError:
+            _LOGGER.error("API did not return valid JSON")
+            return None
 
-        # Hard guard for unexpected formats
-        if isinstance(login_json, list):
-            _LOGGER.error("Login failed: list response: %s", login_json[:1])
-            return {}
+        # This is the critical guard
         if not isinstance(login_json, dict):
-            _LOGGER.error("Login failed: Unexpected response format: %s", type(login_json))
-            return {}
+            _LOGGER.error("Login failed: Expected a dictionary, but got a %s. Content: %s", type(login_json), login_json)
+            return None
 
-        token = login_json.get("meta", {}).get("session_id")
-
+        # Safe extraction
+        meta = login_json.get("meta")
+        if not isinstance(meta, dict):
+            _LOGGER.error("Login failed: 'meta' is missing or not a dictionary")
+            return None
+            
+        token = meta.get("session_id")
         if not token:
             _LOGGER.error("Login failed: No session_id found.")
             return {}
