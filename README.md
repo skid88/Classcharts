@@ -1,7 +1,7 @@
 # 🏫 Class Charts for Home Assistant _ Test page
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-![Version](https://img.shields.io/badge/version-1.0.5-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.6-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Home_Assistant-blue.svg)
 
 A professional custom integration that brings your **Class Charts** school timetable and homework tracking directly into Home Assistant. Monitor lessons, track classrooms, see which teacher you have next in real-time,
@@ -13,6 +13,7 @@ A professional custom integration that brings your **Class Charts** school timet
 - 👨‍🏫 **Lesson Sensors**: Dedicated entities for `Current Lesson` and `Next Lesson`.
 - 📍 **Location Tracking**: View room numbers and building names for every period.
 - 📋 **Teacher Info**: See the name of the teacher assigned to each lesson.
+- 📝 **Homework List (30 Days)**: Exposes upcoming homework assignments as a list for dashboards.
 - 🎨 **Custom Branding**: Includes built-in icons for a seamless look in your "Devices & Services" list.
 
 ---
@@ -51,16 +52,36 @@ A professional custom integration that brings your **Class Charts** school timet
 | **Homework Outstanding** | `meta.this_week_outstanding_count` | Number of tasks currently due. |
 | **Homework Completed** | `meta.this_week_completed_count` | Number of tasks ticked 'yes'. |
 | **Homework Total** | `meta.this_week_due_count` | All tasks assigned for the current week. |
-| **Current Lesson** | `timetable[0]` | The subject name of the ongoing lesson. |
-| **Next Lesson** | `timetable[1]` | The subject name of the upcoming lesson. |
-| **Timetable Count** | `len(timetable)` | Total number of lessons scheduled for today. |
+| **Homework Upcoming (30 Days)** | `homework.data` | List of upcoming assignments due in the next 30 days (as attributes). |
+| **Current Lesson** | `timetable[today][0]` | The subject name of the ongoing lesson. |
+| **Next Lesson** | `timetable[today][1]` | The subject name of the upcoming lesson. |
+| **Timetable Count** | `len(timetable[today])` | Total number of lessons scheduled for today. |
 | **Class Charts Calendar** | `calendar` platform | Full school schedule visible in HA Calendar. |
+
+## 🧾 Homework List Display (Lovelace)
+
+Use a Markdown card to show each homework item on its own line:
+
+```yaml
+type: markdown
+title: Homework (Next 30 Days)
+content: >
+  {% set items = state_attr('sensor.homework_upcoming_30_days', 'items') or [] %}
+  {% if items | length == 0 %}
+  No homework due in the next 30 days.
+  {% else %}
+  {% for item in items %}
+  - {{ item.subject }}: {{ item.title }}
+  {% endfor %}
+  {% endif %}
+```
 
 ## 🚀 New Features (v30 "Weekend-Safe" Edition)
 - **Direct API Mapping:** Pulls `this_week` counts directly from the API `meta` block for 100% accuracy with the official app.
 - **Crash Protection:** Implements strict length-checks on timetable arrays to prevent `KeyError` during weekends or holidays.
-- **Enhanced Sensors:** 6 core sensors plus a full student calendar.
+- **Enhanced Sensors:** 7 core sensors plus a full student calendar.
 - **Card-Mod Ready:** Optimized unique IDs for easy CSS styling in the dashboard.
+- **Homework List:** New 30-day upcoming homework list exposed for dashboards.
 
 ---
  ![Screenshot](https://github.com/skid88/Classcharts/blob/main/Timetable.png)
@@ -75,9 +96,3 @@ If you encounter any issues or have feature requests, please open an [Issue](htt
 
 ## 📝 License
 This project is for personal use and is not an official Class Charts product.
-
-
-
-
-
-
