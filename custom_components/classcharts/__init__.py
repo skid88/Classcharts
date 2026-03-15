@@ -35,6 +35,7 @@ def _normalize_lesson(lesson):
         "raw": lesson,
     }
 
+
 def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
     """Fetch both Timetable and Homework data."""
     session = requests.Session()
