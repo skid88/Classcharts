@@ -1,89 +1,65 @@
+# 1. Imports at the very top
+import logging
+import datetime
+from datetime import timedelta
+import requests
+from homeassistant.core import HomeAssistant
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
+from .const import DOMAIN, LOGIN_URL, TIMETABLE_URL, CONF_PUPIL_ID, CONF_REFRESH_INTERVAL, CONF_DAYS_TO_FETCH
+
+_LOGGER = logging.getLogger(__name__)
+
+# 2. Helper functions (Flush Left)
+def _normalize_lesson(lesson):
+    # ... your existing normalization code ...
+    return { ... }
+
+# 3. The Sync Function (Flush Left)
 def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
-    """Fetch both Timetable and Homework data."""
-    session = requests.Session()
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 HA-Integration",
-        "Content-Type": "application/x-www-form-urlencoded"
-    })
-    
-    try:
-        # 1. Login
-        login_resp = session.post(
-            LOGIN_URL, 
-            data={"email": email, "password": password, "remember": "true"},
-            timeout=10
+    # ... The code you just pasted goes here ...
+    # ... Ensure the "return" is inside the "try" block ...
+
+# 4. The Coordinator Class (Flush Left)
+class ClassChartsCoordinator(DataUpdateCoordinator):
+    def __init__(self, hass, entry):
+        self.refresh_interval = entry.options.get(CONF_REFRESH_INTERVAL) or entry.data.get(CONF_REFRESH_INTERVAL, 24)
+        self.days_to_fetch = entry.options.get(CONF_DAYS_TO_FETCH) or entry.data.get(CONF_DAYS_TO_FETCH, 7)
+        super().__init__(
+            hass, _LOGGER, name=DOMAIN, 
+            update_interval=timedelta(hours=self.refresh_interval),
         )
-        login_resp.raise_for_status()
-        
-        try:
-            login_json = login_resp.json()
-        except ValueError:
-            _LOGGER.error("API did not return valid JSON")
-            return {"timetable": [], "homework": {}}
+        self.entry = entry
 
-        # Guard against the 'list' object error you saw earlier
-        if not isinstance(login_json, dict):
-            _LOGGER.error("Login failed: Expected a dictionary, but got a %s", type(login_json))
-            return {"timetable": [], "homework": {}}
-
-        # Safe extraction of the token
-        meta = login_json.get("meta", {})
-        token = meta.get("session_id") if isinstance(meta, dict) else None
-
-        if not token:
-            _LOGGER.error("Login failed: No session_id found.")
-            return {"timetable": [], "homework": {}}
-
-        # 2. Fetch Timetable
-        full_schedule = {}
-        auth_headers = {"Authorization": f"Basic {token}"}
-        
-        for i in range(days_to_fetch):
-            target_date = datetime.date.today() + datetime.timedelta(days=i)
-            date_str = target_date.strftime("%Y-%m-%d")
-
-            resp = session.get(
-                f"{TIMETABLE_URL}/{pupil_id}?date={date_str}",
-                headers=auth_headers,
-                timeout=10
-            )
-            
-            if resp.status_code == 200:
-                day_data = resp.json()
-                if isinstance(day_data, dict):
-                    lessons = day_data.get("data", [])
-                    full_schedule[date_str] = [
-                        _normalize_lesson(lesson) for lesson in lessons
-                    ] if isinstance(lessons, list) else []
-
-        # 3. Fetch Homework
-        hw_from = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-        hw_to = (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y-%m-%d")
-        hw_url = f"https://www.classcharts.com/apiv2parent/homeworks/{pupil_id}"
-        
-        hw_resp = session.get(
-            hw_url,
-            params={"display_date": "due_date", "from": hw_from, "to": hw_to},
-            headers=auth_headers,
-            timeout=10
+    async def _async_update_data(self):
+        result = await self.hass.async_add_executor_job(
+            sync_get_classcharts_data,
+            self.entry.data[CONF_EMAIL],
+            self.entry.data[CONF_PASSWORD],
+            self.entry.data[CONF_PUPIL_ID],
+            self.days_to_fetch
         )
-        
-        homework_data = {}
-        if hw_resp.status_code == 200:
-            homework_data = hw_resp.json()
+        if result is None:
+            raise UpdateFailed("Error communicating with ClassCharts API")
+        return result
 
-        # --- THE FIX FOR THE SENSORS ---
-        # Get today's date string to pull out just today's list for the sensors
-        today_str = datetime.date.today().strftime("%Y-%m-%d")
+# 5. THE CRITICAL SETUP FUNCTIONS (Flush Left - No spaces at start of line)
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """This function MUST be here for Home Assistant to start."""
+    coordinator = ClassChartsCoordinator(hass, entry)
+    await coordinator.async_config_entry_first_refresh()
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][entry.entry_id] = coordinator
+    await hass.config_entries.async_forward_entry_setups(entry, ["sensor", "calendar"])
+    entry.async_on_unload(entry.add_update_listener(update_listener))
+    return True
 
-        return {
-            "timetable": full_schedule.get(today_str, []), # Pass list, not dict
-            "homework": homework_data,
-            "full_schedule": full_schedule # Keep this for the calendar platform
-        }
+async def update_listener(hass: HomeAssistant, entry: ConfigEntry):
+    await hass.config_entries.async_reload(entry.entry_id)
 
-    except Exception:
-        _LOGGER.exception("Unexpected error during Class Charts sync")
-        return {"timetable": [], "homework": {}}
-    finally:
-        session.close()
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, ["sensor", "calendar"])
+    if unload_ok:
+        hass.data[DOMAIN].pop(entry.entry_id)
+    return unload_ok
