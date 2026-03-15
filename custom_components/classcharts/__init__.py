@@ -45,27 +45,26 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
     try:
         # 1. Login
         login_resp = session.post(
-    LOGIN_URL, 
-    data={"email": email, "password": password, "remember": "true"},
-    timeout=10
-)
-login_resp.raise_for_status()
-login_json = login_resp.json()
+            LOGIN_URL, 
+            data={"email": email, "password": password, "remember": "true"},
+            timeout=10
+        )
+        login_resp.raise_for_status()
+        login_json = login_resp.json()
 
-# Hard guard for unexpected formats
-if isinstance(login_json, list):
-    _LOGGER.error("Login failed: list response: %s", login_json[:1])
-    return {}
-if not isinstance(login_json, dict):
-    _LOGGER.error("Login failed: Unexpected response format: %s", type(login_json))
-    return {}
+        # Hard guard for unexpected formats
+        if isinstance(login_json, list):
+            _LOGGER.error("Login failed: list response: %s", login_json[:1])
+            return {}
+        if not isinstance(login_json, dict):
+            _LOGGER.error("Login failed: Unexpected response format: %s", type(login_json))
+            return {}
 
-token = login_json.get("meta", {}).get("session_id")
+        token = login_json.get("meta", {}).get("session_id")
 
-if not token:
-    _LOGGER.error("Login failed: No session_id found.")
-    return {}
-
+        if not token:
+            _LOGGER.error("Login failed: No session_id found.")
+            return {}
 
         # 2. Fetch Timetable
         full_schedule = {}
