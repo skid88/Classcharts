@@ -1,6 +1,6 @@
 # 🏫 Class Charts for Home Assistant 
 
-![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.2.1-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Home_Assistant-blue.svg)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 
