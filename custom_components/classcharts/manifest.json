@@ -1,15 +1,12 @@
 {
   "domain": "classcharts",
-  "name": "Class Charts Timetable",
-  "version": "1.0.6",
-  "documentation": "https://github.com/skid88/Classcharts",
-  "issue_tracker": "https://github.com/skid88/Classcharts/issues",
-  "codeowners": ["@skid88"],
-  "integration_type": "service",
+  "name": "Class Charts",
+  "codeowners": ["@yourusername"],
+  "dependencies": [],
+  "documentation": "https://github.com/yourusername/Classcharts",
+  "integration_type": "hub",
   "iot_class": "cloud_polling",
-  "requirements": [
-    "requests>=2.31.0"
-  ],
-  "config_flow": true,
-  "homeassistant": "2024.1.0"
+  "issue_tracker": "https://github.com/yourusername/Classcharts/issues",
+  "requirements": ["requests"],
+  "version": "1.1.0"
 }
