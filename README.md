@@ -1,4 +1,4 @@
-# 🏫 Class Charts for Home Assistant ------TEST--------
+# 🏫 Class Charts for Home Assistant 
 
 ![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Home_Assistant-blue.svg)
