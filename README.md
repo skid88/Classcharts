@@ -42,20 +42,24 @@ A modern, UI-configurable integration that brings your **Class Charts** school t
 
 ## 📊 Available Entities
 
-### 🗓️ Timetable & Calendar
-| Entity | Description |
+### 🗓️ Calendars
+| Entity ID | Description |
 | :--- | :--- |
-| `calendar.class_charts` | Full interactive school schedule with rooms and teachers. |
-| `sensor.current_lesson` | The name of the subject currently being taught. |
-| `sensor.next_lesson` | The name of the next scheduled subject. |
-| `sensor.timetable_count` | Total number of lessons scheduled for the current day. |
+| `calendar.class_charts_timetable` | Your daily school timetable (Lessons, Rooms, Teachers). |
+| `calendar.class_charts_homework` | Due dates for all assignments as calendar events. |
 
 ### 📝 Homework Sensors
-| Entity | Description |
+| Entity ID | Description |
 | :--- | :--- |
-| `sensor.outstanding_homework` | Count of tasks not yet finished. (Includes full list in attributes). |
-| `sensor.completed_homework` | Count of tasks marked as completed. |
-| `sensor.homework_total` | The sum of all homework tasks assigned for the period. |
+| `sensor.outstanding_homework` | Count of active homework. Includes a list in attributes. |
+| `sensor.homework_due` | Count of homework tasks due this week. |
+| `sensor.completed_homework` | Total number of tasks marked as completed. |
+
+### 👨‍🏫 Lesson Monitoring
+| Entity ID | Description |
+| :--- | :--- |
+| `sensor.class_charts_current_lesson` | The subject you should be in right now. |
+| `sensor.class_charts_next_lesson` | The subject coming up next. |
 
 ---
 
