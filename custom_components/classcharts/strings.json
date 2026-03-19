@@ -5,7 +5,7 @@
         "data": {
           "email": "Email Address",
           "password": "Password",
-          "pupil_id": 8488170       }
+          "pupil_id": "Pupil ID"       }
       }
     },
     "error": {
