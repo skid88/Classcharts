@@ -82,17 +82,17 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class ClassChartsOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle options flow (Settings menu after installation)."""
+    """Handle options flow for Class Charts settings."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
+    # REMOVE THE __init__ ENTIRELY
+    # The base class now handles everything automatically.
 
     async def async_step_init(self, user_input=None):
         """Manage the actual settings menu."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
+        # Use self.config_entry (it is provided by the base class)
         options = self.config_entry.options
 
         return self.async_show_form(
