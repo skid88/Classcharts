@@ -44,6 +44,7 @@ class ClassChartsOptionsFlowHandler(config_entries.OptionsFlow):
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize options flow."""
+        self.config_entry = config_entry
     
         # The base class (OptionsFlow) handles it.
         super().__init__()
