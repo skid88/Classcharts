@@ -2,6 +2,7 @@
   "domain": "classcharts",
   "name": "Class Charts",
   "codeowners": ["@skid88"],
+  "config_flow": true,
   "documentation": "https://github.com/skid88/Classcharts",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/skid88/Classcharts/issues",
