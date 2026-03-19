@@ -78,7 +78,7 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry):
         """Link the options flow to the config flow."""
-        return ClassChartsOptionsFlowHandler(config_entry)
+        return ClassChartsOptionsFlowHandler()
 
 
 class ClassChartsOptionsFlowHandler(config_entries.OptionsFlow):
