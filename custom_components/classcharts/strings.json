@@ -9,8 +9,8 @@
       }
     },
     "error": {
-      "invalid_auth": "Invalid email or password",
-      "cannot_connect": "Failed to connect to Class Charts"
+      "invalid_auth": "Invalid Credentials. Please check your email and password.",
+      "cannot_connect": "Failed to connect to Class Charts."
     }
   }
 }
