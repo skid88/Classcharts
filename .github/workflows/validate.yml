@@ -4,9 +4,8 @@ on:
   push:
   pull_request:
   schedule:
-    - cron: "0 0 * * *" # Runs every night at midnight to check for new rules
-  workflow_dispatch: # Allows you to run it manually from the "Actions" tab
-
+    - cron: "0 0 * * *"
+  workflow_dispatch: 
 jobs:
   validate-hacs:
     runs-on: "ubuntu-latest"
@@ -17,4 +16,4 @@ jobs:
       - name: HACS validation
         uses: "hacs/action@main"
         with:
-          category: "integration" # Tells the bot this is a custom integration
+          category: "integration" 
