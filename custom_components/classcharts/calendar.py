@@ -1,3 +1,6 @@
+import re
+import html
+
 from __future__ import annotations
 from datetime import datetime, date, timedelta
 
@@ -5,6 +8,24 @@ from homeassistant.util import dt as dt_util
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
+
+# 1. Place the helper function OUTSIDE the classes so it's globally available
+def clean_html_tags(raw_html: str) -> str:
+    """Strip HTML tags and unescape HTML entities."""
+    if not raw_html:
+        return ""
+    
+    # Unescape things like &amp; or &quot;
+    text = html.unescape(raw_html)
+    
+    # Use RegEx to remove anything inside < > brackets
+    clean_text = re.sub(r'<[^>]+>', '', text)
+    
+    # Clean up extra spaces or newlines left behind
+    clean_text = re.sub(r'\n\s*\n', '\n', clean_text)
+    
+    return clean_text.strip()
+
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up Class Charts calendars."""
@@ -69,7 +90,7 @@ class ClassChartsTimetableCalendar(CoordinatorEntity, CalendarEntity):
 
 class ClassChartsHomeworkCalendar(CoordinatorEntity, CalendarEntity):
     """Calendar for homework due dates."""
-    
+
     def __init__(self, coordinator, entry):
         super().__init__(coordinator)
         self._attr_name = "Class Charts Homework"
@@ -99,12 +120,17 @@ class ClassChartsHomeworkCalendar(CoordinatorEntity, CalendarEntity):
         for hw in homework_list:
             try:
                 due_date = date.fromisoformat(hw.get("due_date"))
+                
+                # 2. Grab the raw description, then clean it!
+                raw_desc = hw.get("description", "")
+                clean_desc = clean_html_tags(raw_desc)
+
                 events.append(
                     CalendarEvent(
                         summary=f"HW: {hw.get('subject', 'Assignment')}",
                         start=due_date,
                         end=due_date + timedelta(days=1),
-                        description=hw.get("description", ""),
+                        description=clean_desc, # <-- Use the cleaned description here
                     )
                 )
             except (KeyError, ValueError, TypeError):
