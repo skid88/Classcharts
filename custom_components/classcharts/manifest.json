@@ -1,7 +1,6 @@
 {
   "domain": "classcharts",
   "name": "Class Charts",
-  "brand_id": "classcharts",
   "codeowners": ["@skid88"],
   "config_flow": true,
   "documentation": "https://github.com/skid88/Classcharts",
