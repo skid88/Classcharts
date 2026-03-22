@@ -13,7 +13,7 @@ from .const import (
     CONF_PUPIL_ID,
     CONF_REFRESH_INTERVAL,
     CONF_DAYS_TO_FETCH,
-    LOGIN_URL,  # Ensure this is defined in your const.py
+    LOGIN_URL,  
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     data=user_input
                 )
             else:
-                # 2. This key "invalid_auth" must exist in your en.json
+                
                 errors["base"] = "invalid_auth"
 
         return self.async_show_form(
@@ -55,7 +55,7 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def _test_credentials(self, email, password):
         """Return true if credentials are valid by hitting the API."""
-        # Use the Home Assistant shared session (Best Practice)
+       
         session = async_get_clientsession(self.hass)
         payload = {"email": email, "password": password}
 
@@ -64,7 +64,7 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 async with session.post(LOGIN_URL, data=payload) as response:
                     if response.status == 200:
                         data = await response.json()
-                        # Adjust "success" based on the actual Class Charts API response keys
+                       
                         return data.get("success", False) or "token" in data
                     return False
         except (aiohttp.ClientError, asyncio.TimeoutError):
@@ -84,15 +84,14 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class ClassChartsOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Class Charts settings."""
 
-    # REMOVE THE __init__ ENTIRELY
-    # The base class now handles everything automatically.
+    
 
     async def async_step_init(self, user_input=None):
         """Manage the actual settings menu."""
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        # Use self.config_entry (it is provided by the base class)
+        
         options = self.config_entry.options
 
         return self.async_show_form(

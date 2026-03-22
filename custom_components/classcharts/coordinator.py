@@ -103,8 +103,7 @@ class ClassChartsCoordinator(DataUpdateCoordinator):
     def __init__(self, hass, entry):
         self.entry = entry
         
-        # We need to make sure these match the strings in const.py
-        # Defaulting to 14 if the setting isn't found
+    
         self.days_to_fetch = entry.options.get(CONF_DAYS_TO_FETCH, 
                              entry.data.get(CONF_DAYS_TO_FETCH, 14))
         
@@ -120,7 +119,7 @@ class ClassChartsCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         """Fetch data from API using executor."""
-        # This log line will tell us EXACTLY what the code is doing
+        
         _LOGGER.info("Class Charts: Fetching %s days of data", self.days_to_fetch)
         
         return await self.hass.async_add_executor_job(

@@ -6,6 +6,6 @@
   "documentation": "https://github.com/skid88/Classcharts",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/skid88/Classcharts/issues",
-  "version": "1.2.2",
-  "requirements": []
+  "requirements": [],
+  "version": "v1.2.2"
 }
