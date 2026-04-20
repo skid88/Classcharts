@@ -79,6 +79,9 @@ class ClassChartsTimetableCalendar(CoordinatorEntity, CalendarEntity):
         _LOGGER.debug("Calendar requested events between %s and %s", start_date, end_date)
         
         all_events = self._get_events()
+        _LOGGER.warning("--- CALENDAR DEBUG START ---")
+        _LOGGER.warning("Request Range: %s to %s", start_date.date(), end_date.date())
+        _LOGGER.warning("Total lessons found in memory: %s", len(all_events))
         
         # 1. FIX: Filter real lessons that land WITHIN the view range
         # We want lessons where the date is >= start AND <= end.
