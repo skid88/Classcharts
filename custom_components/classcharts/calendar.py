@@ -99,14 +99,14 @@ class ClassChartsTimetableCalendar(CoordinatorEntity, CalendarEntity):
             days_to_fetch = self.coordinator.config_entry.options.get(CONF_DAYS_TO_FETCH, 7)
             
             today = dt_util.now().date()
-            max_data_date = today + timedelta(days=days_to_fetch)
+            max_data_date = today + timedelta(days=(days_to_fetch - 1))
             
             current_day = start_date.date()
-            finish_day = end_date.date()
+            finish_day = min(end_date.date(), max_data_date)
             
             while current_day <= finish_day:
                 # Logic: Weekday AND Today/Future AND Within Data Window
-                if current_day.weekday() < 5 and today <= current_day <= max_data_date:
+                if current_day.weekday() < 5 and current_day >= today:
                     
                     # Check ALL_EVENTS so we don't get fooled by UI filters
                     day_has_lesson = any(e.start.date() == current_day for e in all_events)
