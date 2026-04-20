@@ -74,7 +74,7 @@ class ClassChartsTimetableCalendar(CoordinatorEntity, CalendarEntity):
         return sorted(events, key=lambda x: x.start)
 
     # Fixed Indentation: Now correctly inside the ClassChartsTimetableCalendar class
-   async def async_get_events(self, hass, start_date, end_date) -> list[CalendarEvent]:
+    async def async_get_events(self, hass, start_date, end_date) -> list[CalendarEvent]:
         """Return events for the UI, including 'No School' for empty weekdays."""
         _LOGGER.debug("Calendar requested events between %s and %s", start_date, end_date)
         
