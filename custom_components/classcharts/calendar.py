@@ -74,16 +74,17 @@ class ClassChartsTimetableCalendar(CoordinatorEntity, CalendarEntity):
         return sorted(events, key=lambda x: x.start)
 
     # Fixed Indentation: Now correctly inside the ClassChartsTimetableCalendar class
-    async def async_get_events(self, hass, start_date, end_date) -> list[CalendarEvent]:
+   async def async_get_events(self, hass, start_date, end_date) -> list[CalendarEvent]:
         """Return events for the UI, including 'No School' for empty weekdays."""
         _LOGGER.debug("Calendar requested events between %s and %s", start_date, end_date)
         
         all_events = self._get_events()
         
-        # 1. Filter real lessons (using .date() to ensure they catch full day ranges)
+        # 1. FIX: Filter real lessons that land WITHIN the view range
+        # We want lessons where the date is >= start AND <= end.
         filtered_events = [
             e for e in all_events 
-            if e.start.date() >= start_date.date() and e.end.date() <= end_date.date()
+            if start_date.date() <= e.start.date() <= end_date.date()
         ]
 
         # 2. Check the "No School" toggle from options
@@ -104,11 +105,10 @@ class ClassChartsTimetableCalendar(CoordinatorEntity, CalendarEntity):
                 # Logic: Weekday AND Today/Future AND Within Data Window
                 if current_day.weekday() < 5 and today <= current_day <= max_data_date:
                     
-                    # Check if this specific day has any real lessons
+                    # Check ALL_EVENTS so we don't get fooled by UI filters
                     day_has_lesson = any(e.start.date() == current_day for e in all_events)
                     
                     if not day_has_lesson:
-                        # Define standard school hours to make it look like a "block" in the UI
                         day_start = dt_util.as_local(
                             datetime.combine(current_day, datetime.strptime("08:30", "%H:%M").time())
                         )
@@ -121,13 +121,12 @@ class ClassChartsTimetableCalendar(CoordinatorEntity, CalendarEntity):
                                 summary="No School",
                                 start=day_start,
                                 end=day_end,
-                                description="No lessons scheduled for this school day within the fetched range.",
+                                description="No lessons scheduled for this school day.",
                                 location="Home",
                             )
                         )
                 current_day += timedelta(days=1)
 
-        
         return sorted(filtered_events, key=lambda x: x.start)
         
 class ClassChartsHomeworkCalendar(CoordinatorEntity, CalendarEntity):
