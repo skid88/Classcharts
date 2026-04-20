@@ -105,7 +105,7 @@ class ClassChartsTimetableCalendar(CoordinatorEntity, CalendarEntity):
                 if current_day.weekday() < 5 and today <= current_day <= max_data_date:
                     
                     # Check if this specific day has any real lessons
-                    day_has_lesson = any(e.start.date() == current_day for e in filtered_events)
+                    day_has_lesson = any(e.start.date() == current_day for e in all_events)
                     
                     if not day_has_lesson:
                         # Define standard school hours to make it look like a "block" in the UI
