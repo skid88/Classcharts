@@ -92,15 +92,18 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ) as response:
                     
                     if response.status == 302:
-                        # Inspect the active cookie headers for authentication clearance
-                        cookies = [val for header, val in response.raw_headers if header.lower() == b"set-cookie"]
-                        cookie_string = "".join([c.decode("utf-8", errors="ignore") for c in cookies])
-                        
-                        if "parent_session_credentials" in cookie_string:
+                        # Use aiohttp's built-in cookie jar parser instead of raw_headers
+                        if "parent_session_credentials" in response.cookies:
+                            _LOGGER.info("Authentication handshake successful! Found parent session cookie.")
                             return True
-                            
-                    _LOGGER.error("Authentication handshake rejected. HTTP Status: %s", response.status)
-                    return False
+                        else:
+                            # Let's see what cookies the server actually gave us if it failed
+                            found_cookies = list(response.cookies.keys())
+                            _LOGGER.error(
+                                "Login redirected (302), but 'parent_session_credentials' was missing. Cookies found: %s", 
+                                found_cookies
+                            )
+                            return False
                     
         except (aiohttp.ClientError, asyncio.TimeoutError) as err:
             _LOGGER.error("Timeout or connection error connecting to Class Charts: %s", err)
