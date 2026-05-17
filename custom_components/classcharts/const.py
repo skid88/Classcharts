@@ -3,7 +3,7 @@
 DOMAIN = "classcharts"
 
 # Updated for the standard Class Charts Parent API structure
-BASE_URL = "https://www.classcharts.com/apiv2parent"
+BASE_URL = "https://www.classcharts.com/parent"
 LOGIN_URL = f"{BASE_URL}/login"
 PING_URL = f"{BASE_URL}/ping"      
 PUPILS_URL = f"{BASE_URL}/pupils"
