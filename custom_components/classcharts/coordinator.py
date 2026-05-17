@@ -7,7 +7,6 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from .const import (
     DOMAIN, 
-    LOGIN_URL, 
     TIMETABLE_URL, 
     CONF_PUPIL_ID,
     CONF_REFRESH_INTERVAL,
@@ -15,6 +14,9 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# Updated base URLs matching the new client specifications
+NEW_LOGIN_URL = "https://www.classcharts.com/parent/login"
 
 def _normalize_lesson(lesson):
     """Clean up lesson data for the sensors and calendar."""
@@ -33,13 +35,13 @@ def _normalize_lesson(lesson):
     }
 
 def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
-    """Fetch both Timetable and Homework data safely with a valid browser context."""
+    """Fetch data using the new browser-cookie authentication system."""
     session = requests.Session()
     
-    # 1. Bypass Cloudflare 500 Proxy errors by using a real Chrome desktop user agent
+    # Standard authentic browser setup
     session.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "en-GB,en;q=0.9",
         "Origin": "https://www.classcharts.com",
         "Referer": "https://www.classcharts.com/",
@@ -47,30 +49,38 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
     })
     
     try:
-        # 2. Login (POST)
+        # 1. New Login Flow mimicking the repository
+        # We set allow_redirects=False so we can trap the 302 status code and read the cookie jar
+        login_payload = {
+            "_method": "POST",
+            "email": email,
+            "logintype": "existing",
+            "password": password,
+            "recaptcha-token": "no-token-available"
+        }
+        
         login_resp = session.post(
-            LOGIN_URL, 
-            data={"email": email, "password": password, "remember": "true"},
+            NEW_LOGIN_URL, 
+            data=login_payload,
+            allow_redirects=False,
             timeout=15
         )
-        login_resp.raise_for_status()
-        login_json = login_resp.json()
 
-        if not isinstance(login_json, dict):
-            raise UpdateFailed(f"Unexpected login response structure: {type(login_json)}")
+        # The new API signifies success via a 302 redirect back to the portal
+        if login_resp.status_code != 302:
+            _LOGGER.error("New login method rejected. HTTP Code: %s", login_resp.status_code)
+            raise UpdateFailed("ClassCharts rejected authentication credentials")
 
-        token = login_json.get("meta", {}).get("session_id") if isinstance(login_json.get("meta"), dict) else None
-        if not token:
-            raise UpdateFailed("No session_id found in login response")
+        # Verify the crucial parent credential cookie was injected into our session
+        if "parent_session_credentials" not in session.cookies.get_dict():
+            raise UpdateFailed("Authentication cookie 'parent_session_credentials' missing from response")
 
-        # Set up auth headers using the session ID
-        auth_headers = {"Authorization": f"Basic {token}"}
-        
-        # Clear out the POST content-type from the persistent session so future GET requests look clean
+        # Adjust headers context from HTML navigation to JSON endpoint fetching
+        session.headers.update({"Accept": "application/json, text/plain, */*"})
         if "Content-Type" in session.headers:
             del session.headers["Content-Type"]
-        
-        # 3. Fetch Timetable (GET)
+
+        # 2. Fetch Timetable Data (Relying strictly on Session Cookies, NO Auth Headers)
         full_schedule = {}
         for i in range(days_to_fetch):
             target_date = datetime.date.today() + datetime.timedelta(days=i)
@@ -78,7 +88,6 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
 
             resp = session.get(
                 f"{TIMETABLE_URL}/{pupil_id}?date={date_str}",
-                headers=auth_headers,
                 timeout=10
             )
             
@@ -87,10 +96,9 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
                 lessons = day_data.get("data", []) if isinstance(day_data, dict) else []
                 full_schedule[date_str] = [_normalize_lesson(l) for l in lessons] if isinstance(lessons, list) else []
             else:
-                # CRITICAL DIAGNOSTIC LINE:
-                _LOGGER.error("Timetable download rejected! Status Code: %s, Response: %s", resp.status_code, resp.text[:200])
+                _LOGGER.warning("Timetable query failed for %s with status: %s", date_str, resp.status_code)
 
-        # 4. Fetch Homework (GET)
+        # 3. Fetch Homework Data
         hw_from = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         hw_to = (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y-%m-%d")
         hw_url = f"https://www.classcharts.com/apiv2parent/homeworks/{pupil_id}"
@@ -98,12 +106,9 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         hw_resp = session.get(
             hw_url,
             params={"display_date": "due_date", "from": hw_from, "to": hw_to},
-            headers=auth_headers,
             timeout=10
         )
         
-        # Guard Check: If a child has no homework, ClassCharts sends a raw list []. 
-        # We restructure it to a dict here so your sensor.py native_value never crashes.
         homework_data = {"data": [], "meta": {}}
         if hw_resp.status_code == 200:
             hw_json = hw_resp.json()
@@ -111,9 +116,6 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
                 homework_data = {"data": hw_json, "meta": {}}
             elif isinstance(hw_json, dict):
                 homework_data = hw_json
-        else:
-            # CRITICAL DIAGNOSTIC LINE:
-            _LOGGER.error("Homework download rejected! Status Code: %s, Response: %s", hw_resp.status_code, hw_resp.text[:200])
 
         return {
             "timetable": full_schedule,
