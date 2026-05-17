@@ -54,7 +54,7 @@ This integration supports a dynamic **Options Flow**. You can adjust how the int
 | **Refresh Interval** | `24` | How often (in hours) the integration updates data from Class Charts. |
 | **Days to Fetch** | `14` | How many days into the future to look for events/homework. |
 | **Show Completed Homework** | `True` | Toggle to show/hide homework assignments marked as "Completed" in Class Charts. |
-
+| **Show "No School** | `True` | Toggle to inject placeholder events on empty weekend days and holiday slots. |
 ---
 ## 🗓️ Calendars
 
@@ -83,9 +83,9 @@ A view of all homework assignments.
 ### 📝 Homework Sensors
 | Entity ID | Description |
 | :--- | :--- |
-| `sensor.outstanding_homework` | Count of active homework. Includes a list in attributes. |
-| `sensor.homework_due` | Count of homework tasks due this week. |
-| `sensor.completed_homework` | Total number of tasks marked as completed. |
+| `sensor.class_charts_outstanding_homework` | Count of active homework. Includes a list in attributes. |
+| `sensor.class_charts_homework_due` | Count of homework tasks due this week. |
+| `sensor.class_charts_completed_homework` | Total number of tasks marked as completed. |
 
 ### 👨‍🏫 Lesson Monitoring
 | Entity ID | Description |
@@ -103,7 +103,7 @@ Use a **Markdown Card** to display your assignments beautifully:
 
 ```jinja2
 ## 📝 Outstanding Homework
-{% set items = state_attr('sensor.outstanding_homework', 'homework_list') %}
+{% set items = state_attr('sensor.class_charts_outstanding_homework', 'homework_list') %}
 {% if items %}
   {% for hw in items %}
   **{{ hw.title }}** ({{ hw.subject }})
