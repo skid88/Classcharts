@@ -2,6 +2,7 @@ import logging
 import datetime
 from datetime import timedelta
 import requests
+import urllib.parse
 
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
@@ -48,9 +49,12 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         "Content-Type": "application/x-www-form-urlencoded"
     })
     
+    import urllib.parse  # <-- Add this import at the very top of your file
+
+# ... inside sync_get_classcharts_data ...
+
     try:
-        # 1. New Login Flow mimicking the repository
-        # We set allow_redirects=False so we can trap the 302 status code and read the cookie jar
+        # 1. Format the login payload as a raw, strict URL-encoded string
         login_payload = {
             "_method": "POST",
             "email": email,
@@ -59,18 +63,21 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
             "recaptcha-token": "no-token-available"
         }
         
+        # This converts the dictionary into a literal string: _method=POST&email=...
+        encoded_payload = urllib.parse.urlencode(login_payload)
+        
         login_resp = session.post(
             NEW_LOGIN_URL, 
-            data=login_payload,
+            data=encoded_payload,  # <-- Send the raw encoded string
             allow_redirects=False,
             timeout=15
         )
 
         # The new API signifies success via a 302 redirect back to the portal
         if login_resp.status_code != 302:
-            _LOGGER.error("New login method rejected. HTTP Code: %s", login_resp.status_code)
+            _LOGGER.error("New login method rejected. HTTP Code: %s, Response: %s", login_resp.status_code, login_resp.text)
             raise UpdateFailed("ClassCharts rejected authentication credentials")
-
+            
         # Verify the crucial parent credential cookie was injected into our session
         if "parent_session_credentials" not in session.cookies.get_dict():
             raise UpdateFailed("Authentication cookie 'parent_session_credentials' missing from response")
