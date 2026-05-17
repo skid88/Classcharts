@@ -33,15 +33,21 @@ def _normalize_lesson(lesson):
     }
 
 def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
-    """Fetch both Timetable and Homework data safely."""
+    """Fetch both Timetable and Homework data safely with a valid browser context."""
     session = requests.Session()
+    
+    # 1. Bypass Cloudflare 500 Proxy errors by using a real Chrome desktop user agent
     session.headers.update({
-        "User-Agent": "Mozilla/5.0 HA-Integration",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-GB,en;q=0.9",
+        "Origin": "https://www.classcharts.com",
+        "Referer": "https://www.classcharts.com/",
         "Content-Type": "application/x-www-form-urlencoded"
     })
     
     try:
-        # 1. Login
+        # 2. Login (POST)
         login_resp = session.post(
             LOGIN_URL, 
             data={"email": email, "password": password, "remember": "true"},
@@ -50,13 +56,21 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         login_resp.raise_for_status()
         login_json = login_resp.json()
 
-        token = login_json.get("meta", {}).get("session_id")
+        if not isinstance(login_json, dict):
+            raise UpdateFailed(f"Unexpected login response structure: {type(login_json)}")
+
+        token = login_json.get("meta", {}).get("session_id") if isinstance(login_json.get("meta"), dict) else None
         if not token:
             raise UpdateFailed("No session_id found in login response")
 
+        # Set up auth headers using the session ID
         auth_headers = {"Authorization": f"Basic {token}"}
         
-        # 2. Fetch Timetable
+        # Clear out the POST content-type from the persistent session so future GET requests look clean
+        if "Content-Type" in session.headers:
+            del session.headers["Content-Type"]
+        
+        # 3. Fetch Timetable (GET)
         full_schedule = {}
         for i in range(days_to_fetch):
             target_date = datetime.date.today() + datetime.timedelta(days=i)
@@ -71,9 +85,9 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
             if resp.status_code == 200:
                 day_data = resp.json()
                 lessons = day_data.get("data", []) if isinstance(day_data, dict) else []
-                full_schedule[date_str] = [_normalize_lesson(l) for l in lessons]
+                full_schedule[date_str] = [_normalize_lesson(l) for l in lessons] if isinstance(lessons, list) else []
 
-        # 3. Fetch Homework
+        # 4. Fetch Homework (GET)
         hw_from = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         hw_to = (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y-%m-%d")
         hw_url = f"https://www.classcharts.com/apiv2parent/homeworks/{pupil_id}"
@@ -85,7 +99,15 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
             timeout=10
         )
         
-        homework_data = hw_resp.json() if hw_resp.status_code == 200 else {}
+        # Guard Check: If a child has no homework, ClassCharts sends a raw list []. 
+        # We restructure it to a dict here so your sensor.py native_value never crashes.
+        homework_data = {"data": [], "meta": {}}
+        if hw_resp.status_code == 200:
+            hw_json = hw_resp.json()
+            if isinstance(hw_json, list):
+                homework_data = {"data": hw_json, "meta": {}}
+            elif isinstance(hw_json, dict):
+                homework_data = hw_json
 
         return {
             "timetable": full_schedule,
@@ -103,7 +125,6 @@ class ClassChartsCoordinator(DataUpdateCoordinator):
     def __init__(self, hass, entry):
         self.entry = entry
         
-    
         self.days_to_fetch = entry.options.get(CONF_DAYS_TO_FETCH, 
                              entry.data.get(CONF_DAYS_TO_FETCH, 14))
         
@@ -119,7 +140,6 @@ class ClassChartsCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         """Fetch data from API using executor."""
-        
         _LOGGER.info("Class Charts: Fetching %s days of data", self.days_to_fetch)
         
         return await self.hass.async_add_executor_job(
