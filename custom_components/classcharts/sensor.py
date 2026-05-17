@@ -33,8 +33,22 @@ class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
-        hw = self.coordinator.data.get("homework", {})
-        meta = hw.get("meta", {}) if isinstance(hw, dict) else {}
+        """Return the state of the sensor safely, guarding against boot-up lists."""
+        # 1. If the coordinator hasn't fetched data yet or isn't a dictionary, safe default to 0
+        if not self.coordinator.data or not isinstance(self.coordinator.data, dict):
+            return 0
+
+        # 2. Safely extract the homework section
+        homework = self.coordinator.data.get("homework", {})
+        if not isinstance(homework, dict):
+            return 0
+
+        # 3. Safely extract the meta section
+        meta = homework.get("meta", {})
+        if not isinstance(meta, dict):
+            return 0
+
+        # 4. Now line 38 is completely safe to run
         return meta.get(self._key, 0)
 
     @property
