@@ -8,7 +8,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from .const import (
     DOMAIN, 
-    TIMETABLE_URL, 
+    TIMETABLE_URL,
+    HOMEWORK_URL,
     CONF_PUPIL_ID,
     CONF_REFRESH_INTERVAL,
     CONF_DAYS_TO_FETCH
