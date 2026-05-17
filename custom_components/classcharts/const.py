@@ -3,13 +3,12 @@
 DOMAIN = "classcharts"
 
 # Updated for the standard Class Charts Parent API structure
-BASE_URL = "https://www.classcharts.com/parent"
-LOGIN_URL = f"{BASE_URL}/login"
+BASE_URL = "https://www.classcharts.com/apiv2parent"
+LOGIN_URL = "https://www.classcharts.com/parent/login"
 PING_URL = f"{BASE_URL}/ping"      
 PUPILS_URL = f"{BASE_URL}/pupils"
 TIMETABLE_URL = f"{BASE_URL}/timetable"
 HOMEWORK_URL = f"{BASE_URL}/homeworks"
-
 # Configuration Keys
 CONF_PUPIL_ID = "pupil_id"
 
