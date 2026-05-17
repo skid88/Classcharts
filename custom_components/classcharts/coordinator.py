@@ -1,61 +1,28 @@
 import logging
 import datetime
-from datetime import timedelta
 import requests
+import json
 import urllib.parse
-
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
-from .const import (
-    DOMAIN, 
-    TIMETABLE_URL,
-    HOMEWORK_URL,
-    CONF_PUPIL_ID,
-    CONF_REFRESH_INTERVAL,
-    CONF_DAYS_TO_FETCH
-)
+from homeassistant.helpers.update_coordinator import UpdateFailed
+from .const import DOMAIN, TIMETABLE_URL, HOMEWORK_URL, LOGIN_URL, PING_URL
 
 _LOGGER = logging.getLogger(__name__)
 
-# Updated base URLs matching the new client specifications
-NEW_LOGIN_URL = "https://www.classcharts.com/parent/login"
-
-def _normalize_lesson(lesson):
-    """Clean up lesson data for the sensors and calendar."""
-    if not isinstance(lesson, dict):
-        return {}
-    subject = lesson.get("subject") or {}
-    teacher = lesson.get("teacher") or {}
-    room = lesson.get("room") or {}
-    
-    return {
-        "subject_name": lesson.get("subject_name") or subject.get("name") or "Unknown",
-        "teacher_name": lesson.get("teacher_name") or teacher.get("name") or "Unknown",
-        "room_name": lesson.get("room_name") or room.get("name") or "N/A",
-        "start_time": lesson.get("start_time") or lesson.get("start"),
-        "end_time": lesson.get("end_time") or lesson.get("end"),
-    }
-
 def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
-    """Fetch data using the new browser-cookie authentication system."""
+    """Fetch data using the verified hybrid Cookie + Auth + Ping initialization."""
     session = requests.Session()
     
-    # Standard authentic browser setup
     session.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept": "application/json, text/plain, */*",
         "Accept-Language": "en-GB,en;q=0.9",
         "Origin": "https://www.classcharts.com",
         "Referer": "https://www.classcharts.com/",
-        "Content-Type": "application/x-www-form-urlencoded"
     })
     
-    import urllib.parse  # <-- Add this import at the very top of your file
-
-# ... inside sync_get_classcharts_data ...
-
     try:
-        # 1. Format the login payload as a raw, strict URL-encoded string
+        # 1. Step 1: Web Portal Login
+        session.headers.update({"Content-Type": "application/x-www-form-urlencoded"})
         login_payload = {
             "_method": "POST",
             "email": email,
@@ -63,44 +30,63 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
             "password": password,
             "recaptcha-token": "no-token-available"
         }
-        
-        # This converts the dictionary into a literal string: _method=POST&email=...
-        encoded_payload = urllib.parse.urlencode(login_payload)
+        encoded_login = urllib.parse.urlencode(login_payload)
         
         login_resp = session.post(
-            NEW_LOGIN_URL, 
-            data=encoded_payload,  # <-- Send the raw encoded string
+            LOGIN_URL, 
+            data=encoded_login,
             allow_redirects=False,
             timeout=15
         )
 
-        # The new API signifies success via a 302 redirect back to the portal
         if login_resp.status_code != 302:
-            _LOGGER.error("New login method rejected. HTTP Code: %s, Response: %s", login_resp.status_code, login_resp.text)
-            raise UpdateFailed("ClassCharts rejected authentication credentials")
-            
-        # Verify the crucial parent credential cookie was injected into our session
-        if "parent_session_credentials" not in session.cookies.get_dict():
-            raise UpdateFailed("Authentication cookie 'parent_session_credentials' missing from response")
+            raise UpdateFailed(f"ClassCharts web login rejected credentials. Code: {login_resp.status_code}")
 
-        # Adjust headers context from HTML navigation to JSON endpoint fetching
-        session.headers.update({"Accept": "application/json, text/plain, */*"})
+        # 2. Step 2: Extract Token from Cookie Jar
+        cookies_dict = session.cookies.get_dict()
+        raw_cookie_data = cookies_dict.get("parent_session_credentials")
+        
+        if not raw_cookie_data:
+            raise UpdateFailed("Authentication missing parent_session_credentials cookie")
+            
+        decoded_cookie_str = urllib.parse.unquote(raw_cookie_data)
+        cookie_json = json.loads(decoded_cookie_str)
+        session_token = cookie_json.get("session_id")
+        
+        if not session_token:
+            raise UpdateFailed("Failed to parse session_id out of cookie wrapper")
+
+        # Apply hybrid authorization header base
+        session.headers.update({
+            "Authorization": f"Basic {session_token}",
+            "X-Requested-With": "XMLHttpRequest"
+        })
         if "Content-Type" in session.headers:
             del session.headers["Content-Type"]
 
-        # 2. Fetch Timetable Data 
+        # 3. Step 3: Crucial Ping Handshake (Activates the data session)
+        # The GitHub client mandates a POST to /ping with include_data=true to open the session pipeline
+        ping_payload = {"include_data": "true"}
+        encoded_ping = urllib.parse.urlencode(ping_payload)
+        
+        session.headers.update({"Content-Type": "application/x-www-form-urlencoded"})
+        ping_resp = session.post(PING_URL, data=encoded_ping, timeout=10)
+        
+        if "Content-Type" in session.headers:
+            del session.headers["Content-Type"]
+
+        if ping_resp.status_code != 200:
+            raise UpdateFailed(f"API Session initialization via Ping failed. Code: {ping_resp.status_code}")
+
+        # 4. Step 4: Fetch Timetable Data
         full_schedule = {}
         for i in range(days_to_fetch):
             target_date = datetime.date.today() + datetime.timedelta(days=i)
             date_str = target_date.strftime("%Y-%m-%d")
 
             resp = session.get(
-                f"{TIMETABLE_URL}/{pupil_id}?date={date_str}",
-                headers={
-                    "Accept": "application/json, text/plain, */*",
-                    "Referer": "https://www.classcharts.com/parent/timetable",
-                    "X-Requested-With": "XMLHttpRequest"  # <-- Tells the server this is a standard web app data request
-                },
+                f"{TIMETABLE_URL}/{pupil_id}",
+                params={"date": date_str},
                 timeout=10
             )
             
@@ -109,9 +95,9 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
                 lessons = day_data.get("data", []) if isinstance(day_data, dict) else []
                 full_schedule[date_str] = [_normalize_lesson(l) for l in lessons] if isinstance(lessons, list) else []
             else:
-                _LOGGER.warning("Timetable query failed for %s with status: %s", date_str, resp.status_code)
+                _LOGGER.error("Timetable query failed for %s. Code: %s, Server Error Message: %s", date_str, resp.status_code, resp.text[:120])
 
-        # 3. Fetch Homework Data
+        # 5. Step 5: Fetch Homework Data
         hw_from = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         hw_to = (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y-%m-%d")
         hw_url = f"{HOMEWORK_URL}/{pupil_id}"
@@ -119,11 +105,6 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         hw_resp = session.get(
             hw_url,
             params={"display_date": "due_date", "from": hw_from, "to": hw_to},
-            headers={
-                "Accept": "application/json, text/plain, */*",
-                "Referer": "https://www.classcharts.com/parent/homework",
-                "X-Requested-With": "XMLHttpRequest"
-            },
             timeout=10
         )
         
@@ -134,6 +115,8 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
                 homework_data = {"data": hw_json, "meta": {}}
             elif isinstance(hw_json, dict):
                 homework_data = hw_json
+        else:
+            _LOGGER.error("Homework data retrieval failed with code: %s", hw_resp.status_code)
 
         return {
             "timetable": full_schedule,
@@ -141,37 +124,7 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         }
 
     except Exception as err:
-        _LOGGER.error("Error fetching Class Charts data: %s", err)
+        _LOGGER.error("Error fetching Class Charts data payload: %s", err)
         raise UpdateFailed(f"Error communicating with API: {err}")
     finally:
         session.close()
-
-class ClassChartsCoordinator(DataUpdateCoordinator):
-    """Class to manage fetching Class Charts data."""
-    def __init__(self, hass, entry):
-        self.entry = entry
-        
-        self.days_to_fetch = entry.options.get(CONF_DAYS_TO_FETCH, 
-                             entry.data.get(CONF_DAYS_TO_FETCH, 14))
-        
-        self.refresh_interval = entry.options.get(CONF_REFRESH_INTERVAL, 
-                                entry.data.get(CONF_REFRESH_INTERVAL, 24))
-        
-        super().__init__(
-            hass,
-            _LOGGER,
-            name=DOMAIN,
-            update_interval=timedelta(hours=max(1, self.refresh_interval)),
-        )
-
-    async def _async_update_data(self):
-        """Fetch data from API using executor."""
-        _LOGGER.info("Class Charts: Fetching %s days of data", self.days_to_fetch)
-        
-        return await self.hass.async_add_executor_job(
-            sync_get_classcharts_data,
-            self.entry.data[CONF_EMAIL],
-            self.entry.data[CONF_PASSWORD],
-            self.entry.data[CONF_PUPIL_ID],
-            self.days_to_fetch
-        )
