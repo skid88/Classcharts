@@ -87,7 +87,7 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         if "Content-Type" in session.headers:
             del session.headers["Content-Type"]
 
-        # 2. Fetch Timetable Data (Relying strictly on Session Cookies, NO Auth Headers)
+        # 2. Fetch Timetable Data 
         full_schedule = {}
         for i in range(days_to_fetch):
             target_date = datetime.date.today() + datetime.timedelta(days=i)
@@ -95,6 +95,11 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
 
             resp = session.get(
                 f"{TIMETABLE_URL}/{pupil_id}?date={date_str}",
+                headers={
+                    "Accept": "application/json, text/plain, */*",
+                    "Referer": "https://www.classcharts.com/parent/timetable",
+                    "X-Requested-With": "XMLHttpRequest"  # <-- Tells the server this is a standard web app data request
+                },
                 timeout=10
             )
             
@@ -108,11 +113,16 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         # 3. Fetch Homework Data
         hw_from = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         hw_to = (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y-%m-%d")
-        hw_url = f"https://www.classcharts.com/parent/homeworks/{pupil_id}"
+        hw_url = f"{HOMEWORK_URL}/{pupil_id}"
         
         hw_resp = session.get(
             hw_url,
             params={"display_date": "due_date", "from": hw_from, "to": hw_to},
+            headers={
+                "Accept": "application/json, text/plain, */*",
+                "Referer": "https://www.classcharts.com/parent/homeworks",
+                "X-Requested-With": "XMLHttpRequest"
+            },
             timeout=10
         )
         
