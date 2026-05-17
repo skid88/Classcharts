@@ -86,6 +86,9 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
                 day_data = resp.json()
                 lessons = day_data.get("data", []) if isinstance(day_data, dict) else []
                 full_schedule[date_str] = [_normalize_lesson(l) for l in lessons] if isinstance(lessons, list) else []
+            else:
+                # CRITICAL DIAGNOSTIC LINE:
+                _LOGGER.error("Timetable download rejected! Status Code: %s, Response: %s", resp.status_code, resp.text[:200])
 
         # 4. Fetch Homework (GET)
         hw_from = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
@@ -108,6 +111,9 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
                 homework_data = {"data": hw_json, "meta": {}}
             elif isinstance(hw_json, dict):
                 homework_data = hw_json
+        else:
+            # CRITICAL DIAGNOSTIC LINE:
+            _LOGGER.error("Homework download rejected! Status Code: %s, Response: %s", hw_resp.status_code, hw_resp.text[:200])
 
         return {
             "timetable": full_schedule,
