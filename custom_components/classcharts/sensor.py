@@ -53,9 +53,41 @@ class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        """This provides the data for your Markdown card."""
+        """This provides the slimmed-down data for your Markdown card."""
+        if not self.coordinator.data or not isinstance(self.coordinator.data, dict):
+            return {"homework_list": []}
+
         hw = self.coordinator.data.get("homework", {})
-        return {"homework_list": hw.get("data", [])}
+        raw_homework_list = hw.get("data", [])
+        
+        if not isinstance(raw_homework_list, list):
+            return {"homework_list": []}
+
+        slimmed_homework_list = []
+        
+        for item in raw_homework_list:
+            if not isinstance(item, dict):
+                continue
+                
+            # Safely navigate nested status and subject fields
+            status_data = item.get("status", {})
+            status_str = status_data.get("state") if isinstance(status_data, dict) else item.get("status")
+            
+            subject_data = item.get("subject", {})
+            subject_str = subject_data.get("name") if isinstance(subject_data, dict) else item.get("subject")
+
+            slimmed_hw = {
+                "title": item.get("title"),
+                "subject": subject_str,
+                "teacher": item.get("teacher"),
+                "due_date": item.get("due_date"),
+                "status": status_str,
+                # Truncate the massive description down to a clean 100 character preview
+                "description": item.get("description", "")[:100] + "..." if item.get("description") else ""
+            }
+            slimmed_homework_list.append(slimmed_hw)
+
+        return {"homework_list": slimmed_homework_list}
 
 class CCLessonSensor(CoordinatorEntity, SensorEntity):
     """Sensor for Lessons."""
