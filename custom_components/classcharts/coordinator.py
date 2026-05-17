@@ -3,8 +3,20 @@ import datetime
 import requests
 import json
 import urllib.parse
-from homeassistant.helpers.update_coordinator import UpdateFailed
-from .const import DOMAIN, TIMETABLE_URL, HOMEWORK_URL, LOGIN_URL, PING_URL
+from datetime import timedelta
+
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+
+from .const import (
+    DOMAIN, 
+    TIMETABLE_URL, 
+    HOMEWORK_URL, 
+    LOGIN_URL, 
+    PING_URL,
+    CONF_PUPIL_ID,
+    CONF_DAYS_TO_FETCH
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -64,8 +76,7 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         if "Content-Type" in session.headers:
             del session.headers["Content-Type"]
 
-        # 3. Step 3: Crucial Ping Handshake (Activates the data session)
-        # The GitHub client mandates a POST to /ping with include_data=true to open the session pipeline
+        # 3. Step 3: Crucial Ping Handshake
         ping_payload = {"include_data": "true"}
         encoded_ping = urllib.parse.urlencode(ping_payload)
         
@@ -93,9 +104,9 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
             if resp.status_code == 200:
                 day_data = resp.json()
                 lessons = day_data.get("data", []) if isinstance(day_data, dict) else []
-                full_schedule[date_str] = [_normalize_lesson(l) for l in lessons] if isinstance(lessons, list) else []
+                full_schedule[date_str] = lessons if isinstance(lessons, list) else []
             else:
-                _LOGGER.error("Timetable query failed for %s. Code: %s, Server Error Message: %s", date_str, resp.status_code, resp.text[:120])
+                _LOGGER.error("Timetable query failed for %s. Code: %s", date_str, resp.status_code)
 
         # 5. Step 5: Fetch Homework Data
         hw_from = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
@@ -128,3 +139,37 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         raise UpdateFailed(f"Error communicating with API: {err}")
     finally:
         session.close()
+
+
+class ClassChartsCoordinator(DataUpdateCoordinator):
+    """The wrapper class Home Assistant uses to schedule updates."""
+
+    def __init__(self, hass: HomeAssistant, entry):
+        """Initialize the coordinator class."""
+        self.entry = entry
+        
+        # Read parameters out of your config entry storage
+        self.email = entry.data["email"]
+        self.password = entry.data["password"]
+        self.pupil_id = entry.data[CONF_PUPIL_ID]
+        
+        # Read update intervals safely with defaults
+        refresh_interval = entry.options.get("refresh_interval", 24)
+        self.days_to_fetch = entry.options.get(CONF_DAYS_TO_FETCH, 14)
+
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=DOMAIN,
+            update_interval=timedelta(hours=refresh_interval),
+        )
+
+    async def _async_update_data(self):
+        """Route the async coordinator request down to our sync fetch loop."""
+        return await self.hass.async_add_executor_job(
+            sync_get_classcharts_data,
+            self.email,
+            self.password,
+            self.pupil_id,
+            self.days_to_fetch
+        )
