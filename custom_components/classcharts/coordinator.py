@@ -101,7 +101,7 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         # 3. Fetch Homework Data
         hw_from = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         hw_to = (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y-%m-%d")
-        hw_url = f"https://www.classcharts.com/apiv2parent/homeworks/{pupil_id}"
+        hw_url = f"https://www.classcharts.com/parent/homeworks/{pupil_id}"
         
         hw_resp = session.get(
             hw_url,
