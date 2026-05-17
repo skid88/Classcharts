@@ -120,7 +120,7 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
             params={"display_date": "due_date", "from": hw_from, "to": hw_to},
             headers={
                 "Accept": "application/json, text/plain, */*",
-                "Referer": "https://www.classcharts.com/parent/homeworks",
+                "Referer": "https://www.classcharts.com/parent/homework",
                 "X-Requested-With": "XMLHttpRequest"
             },
             timeout=10
