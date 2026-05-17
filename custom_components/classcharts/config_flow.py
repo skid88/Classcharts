@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import aiohttp
+import urllib.parse
 import voluptuous as vol
 
 from homeassistant import config_entries
@@ -13,11 +14,13 @@ from .const import (
     CONF_PUPIL_ID,
     CONF_REFRESH_INTERVAL,
     CONF_DAYS_TO_FETCH,
-    LOGIN_URL,
     CONF_SHOW_NO_SCHOOL
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# Target the updated web portal auth route
+NEW_LOGIN_URL = "https://www.classcharts.com/parent/login"
 
 class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Class Charts."""
@@ -53,23 +56,57 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def _test_credentials(self, email, password):
-        """Return true if credentials are valid by hitting the API."""
+        """Return true if credentials match the new cookie-based system architecture."""
         session = async_get_clientsession(self.hass)
-        payload = {"email": email, "password": password}
+        
+        # Mirror the precise browser footprint to slip through Cloudflare protections
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-GB,en;q=0.9",
+            "Origin": "https://www.classcharts.com",
+            "Referer": "https://www.classcharts.com/",
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+
+        # Build the exact query structure used by the new web portal client
+        payload = {
+            "_method": "POST",
+            "email": email,
+            "logintype": "existing",
+            "password": password,
+            "recaptcha-token": "no-token-available"
+        }
+        
+        # Enforce application/x-www-form-urlencoded string generation
+        encoded_payload = urllib.parse.urlencode(payload)
 
         try:
             async with asyncio.timeout(10):
-                # We use the LOGIN_URL defined in const.py
-                async with session.post(LOGIN_URL, data=payload) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return data.get("success", False) or "token" in data
+                # CRITICAL: allow_redirects=False captures the 302 sequence before aiohttp discards cookies
+                async with session.post(
+                    NEW_LOGIN_URL, 
+                    data=encoded_payload, 
+                    headers=headers, 
+                    allow_redirects=False
+                ) as response:
+                    
+                    if response.status == 302:
+                        # Inspect the active cookie headers for authentication clearance
+                        cookies = [val for header, val in response.raw_headers if header.lower() == b"set-cookie"]
+                        cookie_string = "".join([c.decode("utf-8", errors="ignore") for c in cookies])
+                        
+                        if "parent_session_credentials" in cookie_string:
+                            return True
+                            
+                    _LOGGER.error("Authentication handshake rejected. HTTP Status: %s", response.status)
                     return False
-        except (aiohttp.ClientError, asyncio.TimeoutError):
-            _LOGGER.error("Timeout or connection error connecting to Class Charts")
+                    
+        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+            _LOGGER.error("Timeout or connection error connecting to Class Charts: %s", err)
             return False
         except Exception as err:
-            _LOGGER.exception(f"Unexpected error: {err}")
+            _LOGGER.exception(f"Unexpected error inside config validation flow: {err}")
             return False
 
     @staticmethod
@@ -81,7 +118,6 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class ClassChartsOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Class Charts settings."""
-
 
     async def async_step_init(self, user_input=None):
         """Manage the actual settings menu."""
@@ -106,8 +142,8 @@ class ClassChartsOptionsFlowHandler(config_entries.OptionsFlow):
                     default=options.get("show_completed_homework", True),
                 ): bool,
                 vol.Optional(
-                   CONF_SHOW_NO_SCHOOL,
-                   default=self.config_entry.options.get(CONF_SHOW_NO_SCHOOL, True),
+                    CONF_SHOW_NO_SCHOOL,
+                    default=self.config_entry.options.get(CONF_SHOW_NO_SCHOOL, True),
                 ): bool,
             }),
         )
