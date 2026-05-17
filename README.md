@@ -1,6 +1,6 @@
 # 🏫 Class Charts for Home Assistant 
 
-![Version](https://img.shields.io/badge/version-1.2.4-blue.svg)
+![Version](https://img.shields.io/badge/version-1.2.5-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Home_Assistant-blue.svg)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 
@@ -119,6 +119,14 @@ Use a **Markdown Card** to display your assignments beautifully:
 </p>
 ```
 ![Screenshot](https://github.com/skid88/Classcharts/blob/main/homework2.png)
+---
+## ⚖️ Disclaimer
+
+**This is a personal, open-source project and is completely unofficial.** This integration is independently developed and maintained. It is **not** endorsed, supported, affiliated, or associated with **Class Charts** or its parent company, **Edukey Education Ltd** / **Tes Global**. 
+
+- **Use at your own risk:** This software is provided "as is" without any guarantees or warranties. 
+- **No official support:** Please do not contact Class Charts technical support regarding issues with this Home Assistant integration. If you find a bug or want to request a feature, please open an issue directly in this GitHub repository.
+- **Trademarks:** All product names, logos, and brands are property of their respective owners.
 ---
 ## 🤝 Support
 If you encounter any issues or have feature requests, please open an [Issue](https://github.com/skid88/Classcharts/issues) on this repository.
