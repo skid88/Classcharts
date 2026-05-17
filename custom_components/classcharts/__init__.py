@@ -17,6 +17,18 @@ PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.CALENDAR]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Class Charts from a config entry."""
     
+    # === INSERT THIS BLOCK HERE ===
+    # Fix the first-run options bug by copying defaults if options are empty
+    if not entry.options:
+        _LOGGER.info("First-run initialization: Migrating default setup variables to options.")
+        new_options = {
+            "refresh_interval": entry.data.get("refresh_interval", 24),
+            "days_to_fetch": entry.data.get("days_to_fetch", 14),
+            "show_no_school": entry.data.get("show_no_school", True),
+            "show_completed_homework": entry.data.get("show_completed_homework", True),
+        }
+        hass.config_entries.async_update_entry(entry, options=new_options)
+    
     # 1. Initialize the coordinator
     coordinator = ClassChartsCoordinator(hass, entry)
     
