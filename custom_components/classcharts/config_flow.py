@@ -21,7 +21,6 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 NEW_LOGIN_URL = "https://www.classcharts.com/parent/login"
-PARENT_DASHBOARD_URL = "https://www.classcharts.com/parent/"
 
 class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a multi-step config flow for Class Charts."""
@@ -38,7 +37,6 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
 
         if user_input is not None:
-            # Explicitly extract using your core constants to avoid key mismatches
             students = await self._discover_students(
                 user_input[CONF_EMAIL], 
                 user_input[CONF_PASSWORD]
@@ -46,7 +44,6 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if students:
                 self.discovered_students = students
-                # Save the input to memory using explicit raw string keys for Step 2
                 self.login_data = {
                     "email": user_input[CONF_EMAIL],
                     "password": user_input[CONF_PASSWORD]
@@ -56,7 +53,6 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 errors["base"] = "invalid_auth"
 
-        # Fix the form presentation to use your exact imported const variables
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
@@ -74,7 +70,6 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             selected_id = user_input["student_selection"]
             student_name = self.discovered_students[selected_id]
 
-            # Merge the original login info with our newly selected pupil details
             final_data = {
                 CONF_EMAIL: self.login_data["email"],
                 CONF_PASSWORD: self.login_data["password"],
@@ -87,7 +82,6 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data=final_data
             )
 
-        # Map the dictionary keys into the voluptuous dynamic dropdown selector
         return self.async_show_form(
             step_id="select_student",
             data_schema=vol.Schema({
@@ -97,10 +91,10 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def _discover_students(self, email, password):
-        """Authenticate, follow session redirects, and parse pupil arrays."""
+        """Authenticate, extract dynamic V2 credentials, and scan for pupil mappings."""
         
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
             "Accept-Language": "en-GB,en;q=0.9",
             "Origin": "https://www.classcharts.com",
@@ -120,74 +114,79 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         try:
             async with asyncio.timeout(10):
-                # Using cookie_jar directly within the session context
                 async with aiohttp.ClientSession() as session:
                     
-                    # Submit the handshake and ALLOW redirects to settle cookies
+                    # Submit the credentials form handshake (allowing redirects to fully settle cookies)
                     async with session.post(
                         NEW_LOGIN_URL, 
                         data=encoded_payload, 
                         headers=headers, 
                         allow_redirects=True
                     ) as response:
-                        
-                        _LOGGER.info("Login POST executed. Final landing URL status: %s", response.status)
+                        _LOGGER.info("Login handshake settled with status: %s", response.status)
 
-                    # Build modern AJAX headers with established session cookies
+                    # Extract the dynamic session token from the resulting cookies
+                    session_id_token = None
+                    cookies = session.cookie_jar.filter_cookies("https://www.classcharts.com")
+                    
+                    if "parent_session_credentials" in cookies:
+                        raw_cookie_val = cookies["parent_session_credentials"].value
+                        unquoted_cookie = urllib.parse.unquote(raw_cookie_val)
+                        try:
+                            cookie_json = json.loads(unquoted_cookie)
+                            session_id_token = cookie_json.get("session_id")
+                        except Exception:
+                            pass
+                    
+                    # Fallback if JSON parsing fails: attempt direct extraction from cc-session
+                    if not session_id_token and "cc-session" in cookies:
+                        session_id_token = cookies["cc-session"].value
+
+                    if not session_id_token:
+                        _LOGGER.error("Failed to extract valid authorization session tokens from cookie jar.")
+                        return {}
+
+                    _LOGGER.info("Successfully extracted session validation token: %s...", session_id_token[:6])
+
+                    # Construct exact V2 AJAX API headers using our discovered dynamic token
                     api_headers = {
-                        **headers,
-                        "Accept": "application/json, text/plain, */*",
-                        "X-Requested-With": "XMLHttpRequest"
+                        "Host": "www.classcharts.com",
+                        "Accept": "application/json, text/javascript, */*; q=0.01",
+                        "Accept-Language": "en-US,en;q=0.9",
+                        "Authorization": f"Basic {session_id_token}",
+                        "X-Requested-With": "XMLHttpRequest",
+                        "Referer": "https://www.classcharts.com/mobile/parent",
+                        "User-Agent": headers["User-Agent"]
                     }
                     
-                    # Route 1: Modern Parent Ping Endpoint
-                    async with session.get("https://www.classcharts.com/api/v1/parent/ping", headers=api_headers) as api_response:
+                    # Target the updated V2 parent ping route
+                    v2_ping_url = "https://www.classcharts.com/apiv2parent/ping"
+                    
+                    # Note: The browser uses a POST method for this ping endpoint
+                    async with session.post(v2_ping_url, data="{}", headers=api_headers) as api_response:
                         if api_response.status == 200:
-                            try:
-                                json_data = await api_response.json()
+                            json_data = await api_response.json()
+                            
+                            # Log payload to check mapping patterns
+                            _LOGGER.error("=== CLASS CHARTS V2 PING SUCCESS ===")
+                            _LOGGER.error(json.dumps(json_data))
+                            
+                            pupils_list = json_data.get("data", {}).get("pupils", []) or json_data.get("pupils", [])
+                            if pupils_list and isinstance(pupils_list, list):
+                                found_kids = {}
+                                for p in pupils_list:
+                                    p_id = str(p.get("id") or p.get("pupil_id") or "")
+                                    p_name = p.get("name") or p.get("first_name", f"Student {p_id}")
+                                    if p_id:
+                                        found_kids[p_id] = p_name.strip()
                                 
-                                # Catch payload in logs to verify internal structure
-                                _LOGGER.error("=== CLASS CHARTS SETTLED PING PAYLOAD ===")
-                                _LOGGER.error(json.dumps(json_data))
-                                
-                                pupils_list = json_data.get("data", {}).get("pupils", []) or json_data.get("pupils", [])
-                                if pupils_list and isinstance(pupils_list, list):
-                                    found_kids = {}
-                                    for p in pupils_list:
-                                        p_id = str(p.get("id") or p.get("pupil_id") or "")
-                                        p_name = p.get("name") or p.get("first_name", f"Student {p_id}")
-                                        if p_id:
-                                            found_kids[p_id] = p_name.strip()
+                                if found_kids:
+                                    _LOGGER.info("Discovered Class Charts children successfully via V2: %s", found_kids)
+                                    return found_kids
                                     
-                                    if found_kids:
-                                        _LOGGER.info("Discovered pupils via API v1: %s", found_kids)
-                                        return found_kids
-                            except Exception as json_err:
-                                _LOGGER.debug("API v1 parse skipped: %s", json_err)
+                        else:
+                            _LOGGER.error("V2 API gateway rejected authorization headers. Status: %s", api_response.status)
 
-                    # Route 2: Dedicated Explicit Pupils List Endpoint
-                    async with session.get("https://www.classcharts.com/api/v1/parent/pupils", headers=api_headers) as pupils_response:
-                        if pupils_response.status == 200:
-                            try:
-                                json_data = await pupils_response.json()
-                                pupils_list = json_data.get("data", []) if isinstance(json_data.get("data"), list) else json_data.get("data", {}).get("pupils", [])
-                                if not pupils_list and isinstance(json_data, list):
-                                    pupils_list = json_data
-
-                                if pupils_list:
-                                    found_kids = {}
-                                    for p in pupils_list:
-                                        p_id = str(p.get("id") or "")
-                                        p_name = p.get("name") or p.get("first_name", f"Student {p_id}")
-                                        if p_id:
-                                            found_kids[p_id] = p_name.strip()
-                                    if found_kids:
-                                        _LOGGER.info("Discovered pupils via explicit endpoint: %s", found_kids)
-                                        return found_kids
-                            except Exception as json_err:
-                                _LOGGER.debug("Dedicated pupils API parse skipped: %s", json_err)
-
-                    _LOGGER.error("Session completed successfully, but no valid student mapping could be found.")
                     return {}
                             
         except Exception as err:
