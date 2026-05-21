@@ -25,7 +25,6 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
     """Fetch data using the verified V2 Cookie + Auth + Handshake loop."""
     session = requests.Session()
     
-    # Mirror the successful browser footprint
     session.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
         "Accept": "application/json, text/javascript, */*; q=0.01",
@@ -35,7 +34,7 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
     })
     
     try:
-        # 1. Step 1: Web Portal Login Handshake
+        
         session.headers.update({"Content-Type": "application/x-www-form-urlencoded"})
         login_payload = {
             "_method": "POST",
@@ -46,7 +45,6 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         }
         encoded_login = urllib.parse.urlencode(login_payload)
         
-        # We allow redirects to settle the session across the mobile endpoint shifts
         login_resp = session.post(
             LOGIN_URL, 
             data=encoded_login,
@@ -54,7 +52,7 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
             timeout=15
         )
 
-        # 2. Step 2: Extract Authenticated V2 Token from Session Cookies
+        # 2. Extract Authenticated V2 Token from Session Cookies
         cookies_dict = session.cookies.get_dict()
         session_token = None
         
@@ -83,8 +81,7 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         if "Content-Type" in session.headers:
             del session.headers["Content-Type"]
 
-        # 3. Step 3: Crucial V2 Ping Handshake Initialization
-        # Note: The server requires an empty payload POST transaction here
+        # 3. Crucial V2 Ping Handshake Initialization
         ping_resp = session.post(f"{V2_BASE_URL}/ping", data="{}", timeout=10)
 
         if ping_resp.status_code != 200:
@@ -98,7 +95,7 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         except ValueError:
             pass
 
-        # 4. Step 4: Fetch Updated V2 Timetable Data
+        # 4.Fetch Updated V2 Timetable Data
         full_schedule = {}
         for i in range(days_to_fetch):
             target_date = datetime.date.today() + datetime.timedelta(days=i)
@@ -121,13 +118,15 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
             else:
                 _LOGGER.error("V2 Timetable query failed for %s. Code: %s", date_str, resp.status_code)
 
-        # 5. Step 5: Fetch Updated V2 Homework Data
+        # 5. Fetch Updated V2 Homework Data
         hw_from = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         hw_to = (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y-%m-%d")
         
         # Updated V2 path mapping
+        hw_from = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+        hw_to = (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y-%m-%d")
         hw_resp = session.get(
-            f"{V2_BASE_URL}/homework/{pupil_id}",
+            f"{HOMEWORK_URL}/{pupil_id}",
             params={"display_date": "due_date", "from": hw_from, "to": hw_to},
             timeout=10
         )
@@ -168,7 +167,7 @@ class ClassChartsCoordinator(DataUpdateCoordinator):
         """Initialize the coordinator class."""
         self.entry = entry
         
-        # Read parameters out of your config entry storage
+        # Read parameters out config entry storage
         self.email = entry.data["email"]
         self.password = entry.data["password"]
         self.pupil_id = entry.data[CONF_PUPIL_ID]
