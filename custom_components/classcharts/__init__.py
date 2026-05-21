@@ -17,7 +17,7 @@ PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.CALENDAR]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Class Charts from a config entry."""
     
-    # Fix the first-run options bug by copying defaults if options are empty
+    
     if not entry.options:
         _LOGGER.info("First-run initialization: Migrating default setup variables to options.")
         new_options = {
