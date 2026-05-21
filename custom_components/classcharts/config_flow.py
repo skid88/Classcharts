@@ -97,7 +97,7 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def _discover_students(self, email, password):
-        """Authenticate and verify session negotiation details."""
+        """Authenticate, follow session redirects, and parse pupil arrays."""
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -120,38 +120,75 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         try:
             async with asyncio.timeout(10):
+                # Using cookie_jar directly within the session context
                 async with aiohttp.ClientSession() as session:
                     
-                    # Submit the core login wrapper handshake
+                    # Submit the handshake and ALLOW redirects to settle cookies
                     async with session.post(
                         NEW_LOGIN_URL, 
                         data=encoded_payload, 
                         headers=headers, 
-                        allow_redirects=False
+                        allow_redirects=True
                     ) as response:
                         
-                        # Read the raw body text of the login response
-                        login_body = await response.text()
-                        
-                        _LOGGER.error("=== CLASS CHARTS LOGIN RESPONSE ===")
-                        _LOGGER.error("Status: %s", response.status)
-                        _LOGGER.error("Cookies Returned: %s", list(response.cookies.keys()))
-                        _LOGGER.error("Headers: %s", dict(response.headers))
-                        _LOGGER.error("Body Snippet: %s", login_body[:500])
-                        
-                        if response.status in [200, 302]:
-                            api_headers = {
-                                **headers,
-                                "Accept": "application/json, text/plain, */*",
-                                "X-Requested-With": "XMLHttpRequest"
-                            }
-                            
-                            async with session.get("https://www.classcharts.com/api/v1/parent/ping", headers=api_headers) as api_response:
-                                json_data = await api_response.json()
-                                _LOGGER.error("=== TRIAL PING WITH LIVE COOKIES ===")
-                                _LOGGER.error(json.dumps(json_data))
+                        _LOGGER.info("Login POST executed. Final landing URL status: %s", response.status)
 
-                        return {}
+                    # Build modern AJAX headers with established session cookies
+                    api_headers = {
+                        **headers,
+                        "Accept": "application/json, text/plain, */*",
+                        "X-Requested-With": "XMLHttpRequest"
+                    }
+                    
+                    # Route 1: Modern Parent Ping Endpoint
+                    async with session.get("https://www.classcharts.com/api/v1/parent/ping", headers=api_headers) as api_response:
+                        if api_response.status == 200:
+                            try:
+                                json_data = await api_response.json()
+                                
+                                # Catch payload in logs to verify internal structure
+                                _LOGGER.error("=== CLASS CHARTS SETTLED PING PAYLOAD ===")
+                                _LOGGER.error(json.dumps(json_data))
+                                
+                                pupils_list = json_data.get("data", {}).get("pupils", []) or json_data.get("pupils", [])
+                                if pupils_list and isinstance(pupils_list, list):
+                                    found_kids = {}
+                                    for p in pupils_list:
+                                        p_id = str(p.get("id") or p.get("pupil_id") or "")
+                                        p_name = p.get("name") or p.get("first_name", f"Student {p_id}")
+                                        if p_id:
+                                            found_kids[p_id] = p_name.strip()
+                                    
+                                    if found_kids:
+                                        _LOGGER.info("Discovered pupils via API v1: %s", found_kids)
+                                        return found_kids
+                            except Exception as json_err:
+                                _LOGGER.debug("API v1 parse skipped: %s", json_err)
+
+                    # Route 2: Dedicated Explicit Pupils List Endpoint
+                    async with session.get("https://www.classcharts.com/api/v1/parent/pupils", headers=api_headers) as pupils_response:
+                        if pupils_response.status == 200:
+                            try:
+                                json_data = await pupils_response.json()
+                                pupils_list = json_data.get("data", []) if isinstance(json_data.get("data"), list) else json_data.get("data", {}).get("pupils", [])
+                                if not pupils_list and isinstance(json_data, list):
+                                    pupils_list = json_data
+
+                                if pupils_list:
+                                    found_kids = {}
+                                    for p in pupils_list:
+                                        p_id = str(p.get("id") or "")
+                                        p_name = p.get("name") or p.get("first_name", f"Student {p_id}")
+                                        if p_id:
+                                            found_kids[p_id] = p_name.strip()
+                                    if found_kids:
+                                        _LOGGER.info("Discovered pupils via explicit endpoint: %s", found_kids)
+                                        return found_kids
+                            except Exception as json_err:
+                                _LOGGER.debug("Dedicated pupils API parse skipped: %s", json_err)
+
+                    _LOGGER.error("Session completed successfully, but no valid student mapping could be found.")
+                    return {}
                             
         except Exception as err:
             _LOGGER.exception(f"Unexpected crash during child array discovery sequence: {err}")
