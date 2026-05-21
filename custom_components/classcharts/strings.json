@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Class Charts Setup",
-        "description": "Enter your Class Charts parent account details to discover your linked children.",
+        "description": "Enter your Class Charts parent account details and select the pupil.",
         "data": {
           "email": "Email Address",
           "password": "Password"
