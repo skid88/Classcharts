@@ -24,31 +24,43 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
     """Sensor for Homework stats with attribute list for Markdown."""
+    
+    # Force Home Assistant to handle clean dynamic entity ID names automatically
+    _attr_has_entity_name = True
+
     def __init__(self, coordinator, entry, name, key):
         super().__init__(coordinator)
-        self._attr_name = name
         self._key = key
+        
+        # 1. Grab the dynamic student name from your new config flow
+        student_label = entry.data.get("student_name") or entry.data.get("pupil_id")
+        
+        # 2. Dynamic Friendly Name for the UI
+        self._attr_name = f"{student_label} {name}"
+        
+        # 3. Unique system ID to guarantee zero database collisions
         self._attr_unique_id = f"{entry.entry_id}_hw_{key}"
-        self._attr_device_info = {"identifiers": {(DOMAIN, entry.entry_id)}, "name": "Class Charts"}
+        
+        # 4. Brand the Device Card uniquely after the student
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, entry.entry_id)}, 
+            "name": f"Class Charts ({student_label})"
+        }
 
     @property
     def native_value(self):
         """Return the state of the sensor safely, guarding against boot-up lists."""
-        # 1. If the coordinator hasn't fetched data yet or isn't a dictionary, safe default to 0
         if not self.coordinator.data or not isinstance(self.coordinator.data, dict):
             return 0
 
-        # 2. Safely extract the homework section
         homework = self.coordinator.data.get("homework", {})
         if not isinstance(homework, dict):
             return 0
 
-        # 3. Safely extract the meta section
         meta = homework.get("meta", {})
         if not isinstance(meta, dict):
             return 0
 
-        # 4. Now line 38 is completely safe to run
         return meta.get(self._key, 0)
 
     @property
@@ -69,7 +81,6 @@ class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
             if not isinstance(item, dict):
                 continue
                 
-            # Safely navigate nested status and subject fields
             status_data = item.get("status", {})
             status_str = status_data.get("state") if isinstance(status_data, dict) else item.get("status")
             
@@ -82,7 +93,6 @@ class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
                 "teacher": item.get("teacher"),
                 "due_date": item.get("due_date"),
                 "status": status_str,
-                # Truncate the massive description down to a clean 100 character preview
                 "description": item.get("description", "")[:100] + "..." if item.get("description") else ""
             }
             slimmed_homework_list.append(slimmed_hw)
@@ -91,12 +101,25 @@ class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
 
 class CCLessonSensor(CoordinatorEntity, SensorEntity):
     """Sensor for Lessons."""
+    
+    _attr_has_entity_name = True
+
     def __init__(self, coordinator, entry, type):
         super().__init__(coordinator)
         self._type = type
-        self._attr_name = f"Class Charts {type.capitalize()} Lesson"
+        
+        # 1. Grab the dynamic student name from your new config flow
+        student_label = entry.data.get("student_name") or entry.data.get("pupil_id")
+        
+        # 2. Dynamic Friendly Name for the UI
+        self._attr_name = f"{student_label} {type.capitalize()} Lesson"
         self._attr_unique_id = f"{entry.entry_id}_lesson_{type}"
-        self._attr_device_info = {"identifiers": {(DOMAIN, entry.entry_id)}, "name": "Class Charts"}
+        
+        # 3. Brand the Device Card uniquely after the student
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, entry.entry_id)}, 
+            "name": f"Class Charts ({student_label})"
+        }
 
     @property
     def native_value(self):
