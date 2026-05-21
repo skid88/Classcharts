@@ -1,3 +1,4 @@
+"""The Class Charts integration."""
 import logging
 import asyncio
 import aiohttp
@@ -8,7 +9,6 @@ import re  # Added for parsing the pupil HTML elements cleanly
 from homeassistant import config_entries
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import callback
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import (
     DOMAIN,
@@ -74,39 +74,10 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             selected_id = user_input["student_selection"]
             student_name = self.discovered_students[selected_id]
 
-            # Build the exact storage configuration schema your integration components expect
+            # Merge the original login info with our newly selected pupil details
             final_data = {
                 CONF_EMAIL: self.login_data["email"],
                 CONF_PASSWORD: self.login_data["password"],
-                CONF_PUPIL_ID: selected_id,
-                "student_name": student_name,
-            }
-
-            return self.async_create_entry(
-                title=f"Class Charts ({student_name})", 
-                data=final_data
-            )
-
-        return self.async_show_form(
-            step_id="select_student",
-            data_schema=vol.Schema({
-                vol.Required("student_selection"): vol.In(self.discovered_students)
-            }),
-            errors=errors,
-        )
-
-    async def async_step_select_student(self, user_input=None):
-        """Step 2: Present a clean dropdown list of children."""
-        errors = {}
-
-        if user_input is not None:
-            selected_id = user_input["student_selection"]
-            student_name = self.discovered_students[selected_id]
-
-            # Merge the original login info with our newly selected pupil details
-            final_data = {
-                CONF_EMAIL: self.login_data[CONF_EMAIL],
-                CONF_PASSWORD: self.login_data[CONF_PASSWORD],
                 CONF_PUPIL_ID: selected_id,
                 "student_name": student_name,
             }
@@ -126,8 +97,7 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def _discover_students(self, email, password):
-        """Authenticate and scrape the active session dashboard for linked student IDs."""
-        session = async_get_clientsession(self.hass)
+        """Authenticate using an isolated session container to hold validation cookies firmly."""
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -150,48 +120,53 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         try:
             async with asyncio.timeout(10):
-                # Submit the core login wrapper handshake
-                async with session.post(
-                    NEW_LOGIN_URL, 
-                    data=encoded_payload, 
-                    headers=headers, 
-                    allow_redirects=False
-                ) as response:
+                # FORCE a fresh standalone client session context manager
+                async with aiohttp.ClientSession() as session:
                     
-                    if response.status == 302 and "parent_session_credentials" in response.cookies:
-                        _LOGGER.info("Auth successful. Stepping into dashboard discovery...")
+                    # Submit the core login wrapper handshake
+                    async with session.post(
+                        NEW_LOGIN_URL, 
+                        data=encoded_payload, 
+                        headers=headers, 
+                        allow_redirects=False
+                    ) as response:
                         
-                        # Use the exact same active cookie jar to call the dashboard page
-                        async with session.get(PARENT_DASHBOARD_URL, headers=headers) as dash_response:
-                            html_content = await dash_response.text()
+                        if response.status == 302 and "parent_session_credentials" in response.cookies:
+                            _LOGGER.info("Auth successful. Stepping into dashboard discovery...")
                             
-                            # 1. Broad match: Look for standard profile link anchor structures
-                            student_matches = re.findall(r'href="[^"]*/parent/student/(\d+)"[^>]*>([^<]+)</a>', html_content)
-                            
-                            # 2. Secondary check: Look for select dropdown options containing numeric IDs
-                            if not student_matches:
-                                student_matches = re.findall(r'value="(\d+)"[^>]*>([^<]+)</option>', html_content)
+                            # Use the exact same private session container to execute dashboard reads
+                            async with session.get(PARENT_DASHBOARD_URL, headers=headers) as dash_response:
+                                html_content = await dash_response.text()
                                 
-                            # 3. Ultimate Fallback: Target raw data-id attributes used by modern JavaScript buttons
-                            if not student_matches:
-                                # This catches elements like: data-student-id="123456" or data-id="123456"
-                                raw_ids = re.findall(r'data(?:-student)?-id=["\'](\d+)["\']', html_content)
-                                if raw_ids:
-                                    # Pair the discovered IDs with a generic label if names are hidden in JSON script tags
-                                    student_matches = [(uid, f"Student Profile ({uid})") for uid in set(raw_ids)]
+                                # 1. Broad match: Look for standard profile link anchor structures
+                                student_matches = re.findall(r'href="[^"]*/parent/student/(\d+)"[^>]*>([^<]+)</a>', html_content)
+                                
+                                # 2. Secondary check: Look for select dropdown options containing numeric IDs
+                                if not student_matches:
+                                    student_matches = re.findall(r'value="(\d+)"[^>]*>([^<]+)</option>', html_content)
+                                    
+                                # 3. Ultimate Fallback: Target raw data-id attributes used by modern JavaScript elements
+                                if not student_matches:
+                                    raw_ids = re.findall(r'data(?:-student)?-id=["\'](\d+)["\']', html_content)
+                                    if raw_ids:
+                                        student_matches = [(uid, f"Student Profile ({uid})") for uid in set(raw_ids)]
 
-                            if student_matches:
-                                # Build a clean dict: {"123456": "Jack", "789012": "Emily"}
-                                found_kids = {str(uid): name.strip() for uid, name in student_matches if "Log out" not in name and "Select" not in name}
-                                _LOGGER.info("Discovered Class Charts children: %s", found_kids)
-                                return found_kids
-                            
-                            _LOGGER.error("Authenticated successfully, but could not parse any children from the dashboard view layout.")
+                                if student_matches:
+                                    # Build a clean dict: {"123456": "Jack", "789012": "Emily"}
+                                    found_kids = {str(uid): name.strip() for uid, name in student_matches if "Log out" not in name and "Select" not in name}
+                                    _LOGGER.info("Discovered Class Charts children: %s", found_kids)
+                                    return found_kids
+                                
+                                _LOGGER.error("Authenticated successfully, but could not parse any children from the dashboard view layout.")
+                                return {}
+                        else:
+                            _LOGGER.error(
+                                "Login handshake dropped. Status code returned: %s. Cookies caught: %s", 
+                                response.status, 
+                                list(response.cookies.keys())
+                            )
                             return {}
-                    else:
-                        _LOGGER.error("Login redirected or failed without validating session cookie structures.")
-                        return {}
-                        
+                            
         except (aiohttp.ClientError, asyncio.TimeoutError) as err:
             _LOGGER.error("Connection or timeout error while running student discovery: %s", err)
             return {}
