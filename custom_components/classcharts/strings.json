@@ -1,20 +1,25 @@
-
 {
   "config": {
     "step": {
       "user": {
         "title": "Class Charts Setup",
-        "description": "Enter your Class Charts parent account details. You can find your Pupil ID on your child's profile page.",
+        "description": "Enter your Class Charts parent account details to discover your linked children.",
         "data": {
           "email": "Email Address",
-          "password": "Password",
-          "pupil_id": "Pupil ID"
+          "password": "Password"
+        }
+      },
+      "select_student": {
+        "title": "Select Student Profile",
+        "description": "Select which child profile you want to add as this integration instance:",
+        "data": {
+          "student_selection": "Select Child"
         }
       }
     },
     "error": {
       "invalid_auth": "Invalid Credentials. Please check your email and password.",
-      "cannot_connect": "Failed to connect to Class Charts. Please Check internet",
+      "cannot_connect": "Failed to connect to Class Charts. Please check internet connection.",
       "unknown": "An unexpected error occurred."
     }
   },
@@ -26,7 +31,8 @@
         "data": {
           "days_to_fetch": "Days to Fetch (1-30)",
           "refresh_interval": "Update Frequency (Hours)",
-          "show_completed_homework": "Display completed homework on calendar"
+          "show_completed_homework": "Display completed homework on calendar",
+          "show_no_school": "Display 'No School' placeholders on weekends"
         }
       }
     }
