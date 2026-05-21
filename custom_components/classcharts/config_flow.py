@@ -34,11 +34,11 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self.discovered_students = {}
 
     async def async_step_user(self, user_input=None):
-        """Step 1: Capture credentials and discover linked children."""
+        """Step 1: Capture credentials using your exact imported constants."""
         errors = {}
 
         if user_input is not None:
-            # Test credentials and fetch the student list using the active session
+            # Explicitly extract using your core constants to avoid key mismatches
             students = await self._discover_students(
                 user_input[CONF_EMAIL], 
                 user_input[CONF_PASSWORD]
@@ -46,18 +46,51 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if students:
                 self.discovered_students = students
-                self.login_data = user_input
+                # Save the input to memory using explicit raw string keys for Step 2
+                self.login_data = {
+                    "email": user_input[CONF_EMAIL],
+                    "password": user_input[CONF_PASSWORD]
+                }
                 
-                # Move seamlessly to Step 2
                 return await self.async_step_select_student()
             else:
                 errors["base"] = "invalid_auth"
 
+        # Fix the form presentation to use your exact imported const variables
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
                 vol.Required(CONF_EMAIL): str,
                 vol.Required(CONF_PASSWORD): str,
+            }),
+            errors=errors,
+        )
+
+    async def async_step_select_student(self, user_input=None):
+        """Step 2: Present a clean dropdown list of children."""
+        errors = {}
+
+        if user_input is not None:
+            selected_id = user_input["student_selection"]
+            student_name = self.discovered_students[selected_id]
+
+            # Build the exact storage configuration schema your integration components expect
+            final_data = {
+                CONF_EMAIL: self.login_data["email"],
+                CONF_PASSWORD: self.login_data["password"],
+                CONF_PUPIL_ID: selected_id,
+                "student_name": student_name,
+            }
+
+            return self.async_create_entry(
+                title=f"Class Charts ({student_name})", 
+                data=final_data
+            )
+
+        return self.async_show_form(
+            step_id="select_student",
+            data_schema=vol.Schema({
+                vol.Required("student_selection"): vol.In(self.discovered_students)
             }),
             errors=errors,
         )
