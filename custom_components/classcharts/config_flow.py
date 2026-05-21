@@ -132,17 +132,24 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         async with session.get(PARENT_DASHBOARD_URL, headers=headers) as dash_response:
                             html_content = await dash_response.text()
                             
-                            # Regex patterns looking for standard child account switch configurations 
-                            # (Matches typical dashboard URL endpoints: /parent/student/123456 or elements containing data strings)
+                            # 1. Broad match: Look for standard profile link anchor structures
                             student_matches = re.findall(r'href="[^"]*/parent/student/(\d+)"[^>]*>([^<]+)</a>', html_content)
                             
+                            # 2. Secondary check: Look for select dropdown options containing numeric IDs
                             if not student_matches:
-                                # Fallback match group if they handle the child selection elements via data attributes or dropdown options
                                 student_matches = re.findall(r'value="(\d+)"[^>]*>([^<]+)</option>', html_content)
+                                
+                            # 3. Ultimate Fallback: Target raw data-id attributes used by modern JavaScript buttons
+                            if not student_matches:
+                                # This catches elements like: data-student-id="123456" or data-id="123456"
+                                raw_ids = re.findall(r'data(?:-student)?-id=["\'](\d+)["\']', html_content)
+                                if raw_ids:
+                                    # Pair the discovered IDs with a generic label if names are hidden in JSON script tags
+                                    student_matches = [(uid, f"Student Profile ({uid})") for uid in set(raw_ids)]
 
                             if student_matches:
                                 # Build a clean dict: {"123456": "Jack", "789012": "Emily"}
-                                found_kids = {str(uid): name.strip() for uid, name in student_matches if "Log out" not in name}
+                                found_kids = {str(uid): name.strip() for uid, name in student_matches if "Log out" not in name and "Select" not in name}
                                 _LOGGER.info("Discovered Class Charts children: %s", found_kids)
                                 return found_kids
                             
