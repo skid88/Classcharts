@@ -17,7 +17,6 @@ PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.CALENDAR]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Class Charts from a config entry."""
     
-    # === INSERT THIS BLOCK HERE ===
     # Fix the first-run options bug by copying defaults if options are empty
     if not entry.options:
         _LOGGER.info("First-run initialization: Migrating default setup variables to options.")
@@ -43,7 +42,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
     # 4. Register the listener for Option Flow changes
-    # When you change "Refresh Interval" or "Show Completed HW", this reloads the integration.
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 
     # 5. Load the sensors and calendars
