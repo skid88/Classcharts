@@ -12,7 +12,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .const import (
     DOMAIN, 
     CONF_PUPIL_ID,
-    CONF_DAYS_TO_FETCH
+    CONF_DAYS_TO_FETCH,
+    HOMEWORK_URL
 )
 
 _LOGGER = logging.getLogger(__name__)
