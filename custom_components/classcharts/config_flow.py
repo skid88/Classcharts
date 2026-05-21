@@ -4,7 +4,6 @@ import asyncio
 import aiohttp
 import urllib.parse
 import voluptuous as vol
-import re  # Added for parsing the pupil HTML elements cleanly
 
 from homeassistant import config_entries
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
@@ -97,7 +96,7 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def _discover_students(self, email, password):
-        """Authenticate using an isolated session container to hold validation cookies firmly."""
+        """Authenticate and poll the internal JSON APIs directly for pupil lists."""
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -120,7 +119,6 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         try:
             async with asyncio.timeout(10):
-                # FORCE a fresh standalone client session context manager
                 async with aiohttp.ClientSession() as session:
                     
                     # Submit the core login wrapper handshake
@@ -132,33 +130,52 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ) as response:
                         
                         if response.status == 302 and "parent_session_credentials" in response.cookies:
-                            _LOGGER.info("Auth successful. Stepping into dashboard discovery...")
+                            _LOGGER.info("Auth successful. Querying Class Charts Pupil API endpoints...")
                             
-                            # Use the exact same private session container to execute dashboard reads
-                            async with session.get(PARENT_DASHBOARD_URL, headers=headers) as dash_response:
-                                html_content = await dash_response.text()
-                                
-                                # 1. Broad match: Look for standard profile link anchor structures
-                                student_matches = re.findall(r'href="[^"]*/parent/student/(\d+)"[^>]*>([^<]+)</a>', html_content)
-                                
-                                # 2. Secondary check: Look for select dropdown options containing numeric IDs
-                                if not student_matches:
-                                    student_matches = re.findall(r'value="(\d+)"[^>]*>([^<]+)</option>', html_content)
-                                    
-                                # 3. Ultimate Fallback: Target raw data-id attributes used by modern JavaScript elements
-                                if not student_matches:
-                                    raw_ids = re.findall(r'data(?:-student)?-id=["\'](\d+)["\']', html_content)
-                                    if raw_ids:
-                                        student_matches = [(uid, f"Student Profile ({uid})") for uid in set(raw_ids)]
+                            # Standard AJAX headers to negotiate JSON responses cleanly
+                            api_headers = {
+                                **headers,
+                                "Accept": "application/json, text/plain, */*",
+                                "X-Requested-With": "XMLHttpRequest"
+                            }
+                            
+                            # Primary Check: Hit the modern version 1 API endpoint
+                            async with session.get("https://www.classcharts.com/api/v1/parent/ping", headers=api_headers) as api_response:
+                                if api_response.status == 200:
+                                    try:
+                                        json_data = await api_response.json()
+                                        pupils_list = json_data.get("data", {}).get("pupils", []) or json_data.get("pupils", [])
+                                        
+                                        if pupils_list and isinstance(pupils_list, list):
+                                            found_kids = {}
+                                            for p in pupils_list:
+                                                p_id = str(p.get("id") or p.get("pupil_id") or "")
+                                                p_name = p.get("name") or p.get("first_name", f"Student {p_id}")
+                                                if p_id:
+                                                    found_kids[p_id] = p_name.strip()
+                                            
+                                            if found_kids:
+                                                _LOGGER.info("Discovered Class Charts children via API v1: %s", found_kids)
+                                                return found_kids
+                                    except Exception as json_err:
+                                        _LOGGER.debug("API v1 parse skipped or failed: %s", json_err)
 
-                                if student_matches:
-                                    # Build a clean dict: {"123456": "Jack", "789012": "Emily"}
-                                    found_kids = {str(uid): name.strip() for uid, name in student_matches if "Log out" not in name and "Select" not in name}
-                                    _LOGGER.info("Discovered Class Charts children: %s", found_kids)
-                                    return found_kids
-                                
-                                _LOGGER.error("Authenticated successfully, but could not parse any children from the dashboard view layout.")
-                                return {}
+                            # Secondary Fallback Check: Hit the traditional base ping endpoint
+                            async with session.get("https://www.classcharts.com/parent/ping", headers=api_headers) as alt_response:
+                                if alt_response.status == 200:
+                                    try:
+                                        json_data = await alt_response.json()
+                                        pupils_list = json_data.get("pupils", [])
+                                        if isinstance(pupils_list, list) and pupils_list:
+                                            found_kids = {str(p.get("id")): p.get("name", "").strip() for p in pupils_list if p.get("id")}
+                                            if found_kids:
+                                                _LOGGER.info("Discovered Class Charts children via legacy API: %s", found_kids)
+                                                return found_kids
+                                    except Exception as json_err:
+                                        _LOGGER.debug("Legacy API parse skipped or failed: %s", json_err)
+
+                            _LOGGER.error("Authenticated successfully, but API endpoints did not return an expected pupil array structure.")
+                            return {}
                         else:
                             _LOGGER.error(
                                 "Login handshake dropped. Status code returned: %s. Cookies caught: %s", 
