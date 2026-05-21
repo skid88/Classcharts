@@ -9,7 +9,6 @@ from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN, CONF_SHOW_NO_SCHOOL 
 
-
 _LOGGER = logging.getLogger(__name__)
 
 def clean_html_tags(raw_html: str) -> str:
@@ -33,13 +32,22 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class ClassChartsTimetableCalendar(CoordinatorEntity, CalendarEntity):
     """Calendar for school lessons."""
     
+    _attr_has_entity_name = True
+    
     def __init__(self, coordinator, entry):
         super().__init__(coordinator)
-        self._attr_name = "Class Charts Timetable"
+        
+        # 1. Grab dynamic student profile name
+        student_label = entry.data.get("student_name") or entry.data.get("pupil_id")
+        
+        # 2. Assign dynamic friendly UI names and matching safe system uniqueness IDs
+        self._attr_name = f"{student_label} Timetable"
         self._attr_unique_id = f"{entry.entry_id}_timetable"
+        
+        # 3. Dynamic Device Association map matching your child's distinct sensor panel card
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": "Class Charts",
+            "name": f"Class Charts ({student_label})",
         }
 
     @property
@@ -73,24 +81,20 @@ class ClassChartsTimetableCalendar(CoordinatorEntity, CalendarEntity):
 
         return sorted(events, key=lambda x: x.start)
 
-    # Fixed Indentation: Now correctly inside the ClassChartsTimetableCalendar class
     async def async_get_events(self, hass, start_date, end_date) -> list[CalendarEvent]:
         """Return events for the UI, including 'No School' for empty weekdays."""
         _LOGGER.debug("Calendar requested events between %s and %s", start_date, end_date)
         
         all_events = self._get_events()
         
-        # 1. Filter real lessons (using .date() to ensure they catch full day ranges)
         filtered_events = [
             e for e in all_events 
             if e.start.date() >= start_date.date() and e.end.date() <= end_date.date()
         ]
 
-        # 2. Check the "No School" toggle from options
         show_no_school = self.coordinator.config_entry.options.get(CONF_SHOW_NO_SCHOOL, True)
 
         if show_no_school:
-            # 3. Get the fetch limit from settings 
             from .const import CONF_DAYS_TO_FETCH
             days_to_fetch = self.coordinator.config_entry.options.get(CONF_DAYS_TO_FETCH, 7)
             
@@ -101,14 +105,10 @@ class ClassChartsTimetableCalendar(CoordinatorEntity, CalendarEntity):
             finish_day = end_date.date()
             
             while current_day <= finish_day:
-                # Logic: Weekday AND Today/Future AND Within Data Window
                 if current_day.weekday() < 5 and today <= current_day <= max_data_date:
-                    
-                    # Check if this specific day has any real lessons
                     day_has_lesson = any(e.start.date() == current_day for e in filtered_events)
                     
                     if not day_has_lesson:
-                        # Define standard school hours to make it look like a "block" in the UI
                         day_start = dt_util.as_local(
                             datetime.combine(current_day, datetime.strptime("08:30", "%H:%M").time())
                         )
@@ -127,19 +127,23 @@ class ClassChartsTimetableCalendar(CoordinatorEntity, CalendarEntity):
                         )
                 current_day += timedelta(days=1)
 
-        
         return sorted(filtered_events, key=lambda x: x.start)
         
 class ClassChartsHomeworkCalendar(CoordinatorEntity, CalendarEntity):
     """Calendar for homework due dates."""
 
+    _attr_has_entity_name = True
+
     def __init__(self, coordinator, entry):
         super().__init__(coordinator)
-        self._attr_name = "Class Charts Homework"
+        
+        student_label = entry.data.get("student_name") or entry.data.get("pupil_id")
+        
+        self._attr_name = f"{student_label} Homework"
         self._attr_unique_id = f"{entry.entry_id}_homework"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": "Class Charts",
+            "name": f"Class Charts ({student_label})",
         }
 
     @property
