@@ -8,7 +8,8 @@ LOGIN_URL = "https://www.classcharts.com/parent/login"
 PING_URL = f"{BASE_URL}/ping"      
 PUPILS_URL = f"{BASE_URL}/pupils"
 TIMETABLE_URL = f"{BASE_URL}/timetable"
-HOMEWORK_URL = f"{BASE_URL}/homeworks"
+HOMEWORK_URL = f"{BASE_URL}/homework"
+
 # Configuration Keys
 CONF_PUPIL_ID = "pupil_id"
 
@@ -17,7 +18,7 @@ ATTR_TEACHER = "teacher"
 ATTR_ROOM = "room"
 ATTR_SUBJECT = "subject"
 
-#Define
+# Options Flow Definitions
 CONF_REFRESH_INTERVAL = "refresh_interval"
 CONF_DAYS_TO_FETCH = "days_to_fetch"
 CONF_SHOW_NO_SCHOOL = "show_no_school"
