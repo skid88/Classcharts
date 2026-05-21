@@ -97,7 +97,7 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def _discover_students(self, email, password):
-        """Authenticate and poll the internal JSON APIs directly for pupil lists."""
+        """Authenticate and verify session negotiation details."""
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -130,100 +130,29 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         allow_redirects=False
                     ) as response:
                         
-                        if response.status == 302 and "parent_session_credentials" in response.cookies:
-                            _LOGGER.info("Auth successful. Querying Class Charts Pupil API endpoints...")
-                            
-                            # Standard AJAX headers to negotiate JSON responses cleanly
+                        # Read the raw body text of the login response
+                        login_body = await response.text()
+                        
+                        _LOGGER.error("=== CLASS CHARTS LOGIN RESPONSE ===")
+                        _LOGGER.error("Status: %s", response.status)
+                        _LOGGER.error("Cookies Returned: %s", list(response.cookies.keys()))
+                        _LOGGER.error("Headers: %s", dict(response.headers))
+                        _LOGGER.error("Body Snippet: %s", login_body[:500])
+                        
+                        if response.status in [200, 302]:
                             api_headers = {
                                 **headers,
                                 "Accept": "application/json, text/plain, */*",
                                 "X-Requested-With": "XMLHttpRequest"
                             }
                             
-                            # Route 1: Modern Parent Ping Endpoint
                             async with session.get("https://www.classcharts.com/api/v1/parent/ping", headers=api_headers) as api_response:
-                                if api_response.status == 200:
-                                    try:
-                                        json_data = await api_response.json()
-                                        
-                                        # FORCE TO ERROR LOGGER TO BYPASS FILTERS
-                                        _LOGGER.error("=== CLASS CHARTS PING API PAYLOAD ===")
-                                        _LOGGER.error(json.dumps(json_data))
-                                        
-                                        pupils_list = json_data.get("data", {}).get("pupils", []) or json_data.get("pupils", [])
-                                        if pupils_list and isinstance(pupils_list, list):
-                                            found_kids = {}
-                                            for p in pupils_list:
-                                                p_id = str(p.get("id") or p.get("pupil_id") or "")
-                                                p_name = p.get("name") or p.get("first_name", f"Student {p_id}")
-                                                if p_id:
-                                                    found_kids[p_id] = p_name.strip()
-                                            
-                                            if found_kids:
-                                                _LOGGER.info("Discovered Class Charts children via API v1: %s", found_kids)
-                                                return found_kids
-                                    except Exception as json_err:
-                                        _LOGGER.debug("API v1 parse skipped or failed: %s", json_err)
+                                json_data = await api_response.json()
+                                _LOGGER.error("=== TRIAL PING WITH LIVE COOKIES ===")
+                                _LOGGER.error(json.dumps(json_data))
 
-                            # Route 2: Dedicated Explicit Pupils List Endpoint
-                            async with session.get("https://www.classcharts.com/api/v1/parent/pupils", headers=api_headers) as pupils_response:
-                                if pupils_response.status == 200:
-                                    try:
-                                        json_data = await pupils_response.json()
-                                        
-                                        # FORCE TO ERROR LOGGER TO BYPASS FILTERS
-                                        _LOGGER.error("=== CLASS CHARTS PUPILS API PAYLOAD ===")
-                                        _LOGGER.error(json.dumps(json_data))
-                                        
-                                        pupils_list = json_data.get("data", []) if isinstance(json_data.get("data"), list) else json_data.get("data", {}).get("pupils", [])
-                                        if not pupils_list and isinstance(json_data, list):
-                                            pupils_list = json_data
-
-                                        if pupils_list:
-                                            found_kids = {}
-                                            for p in pupils_list:
-                                                p_id = str(p.get("id") or "")
-                                                p_name = p.get("name") or p.get("first_name", f"Student {p_id}")
-                                                if p_id:
-                                                    found_kids[p_id] = p_name.strip()
-                                            if found_kids:
-                                                _LOGGER.info("Discovered Class Charts children via dedicated pupils API: %s", found_kids)
-                                                return found_kids
-                                    except Exception as json_err:
-                                        _LOGGER.debug("Dedicated pupils API parse skipped: %s", json_err)
-
-                            # Route 3: Traditional Base Ping Endpoint
-                            async with session.get("https://www.classcharts.com/parent/ping", headers=api_headers) as alt_response:
-                                if alt_response.status == 200:
-                                    try:
-                                        json_data = await alt_response.json()
-                                        
-                                        # FORCE TO ERROR LOGGER TO BYPASS FILTERS
-                                        _LOGGER.error("=== CLASS CHARTS LEGACY PING PAYLOAD ===")
-                                        _LOGGER.error(json.dumps(json_data))
-                                        
-                                        pupils_list = json_data.get("pupils", [])
-                                        if isinstance(pupils_list, list) and pupils_list:
-                                            found_kids = {str(p.get("id")): p.get("name", "").strip() for p in pupils_list if p.get("id")}
-                                            if found_kids:
-                                                _LOGGER.info("Discovered Class Charts children via legacy API: %s", found_kids)
-                                                return found_kids
-                                    except Exception as json_err:
-                                        _LOGGER.debug("Legacy API parse skipped or failed: %s", json_err)
-
-                            _LOGGER.error("Authenticated successfully, but API endpoints did not return an expected pupil array structure.")
-                            return {}
-                        else:
-                            _LOGGER.error(
-                                "Login handshake dropped. Status code returned: %s. Cookies caught: %s", 
-                                response.status, 
-                                list(response.cookies.keys())
-                            )
-                            return {}
+                        return {}
                             
-        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
-            _LOGGER.error("Connection or timeout error while running student discovery: %s", err)
-            return {}
         except Exception as err:
             _LOGGER.exception(f"Unexpected crash during child array discovery sequence: {err}")
             return {}
