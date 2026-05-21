@@ -111,3 +111,158 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         payload = {
             "_method": "POST",
             "email": email,
+            "logintype": "existing",
+            "password": password,
+            "recaptcha-token": "no-token-available"
+        }
+        
+        encoded_payload = urllib.parse.urlencode(payload)
+
+        try:
+            async with asyncio.timeout(10):
+                async with aiohttp.ClientSession() as session:
+                    
+                    # Submit the core login wrapper handshake
+                    async with session.post(
+                        NEW_LOGIN_URL, 
+                        data=encoded_payload, 
+                        headers=headers, 
+                        allow_redirects=False
+                    ) as response:
+                        
+                        if response.status == 302 and "parent_session_credentials" in response.cookies:
+                            _LOGGER.info("Auth successful. Querying Class Charts Pupil API endpoints...")
+                            
+                            # Standard AJAX headers to negotiate JSON responses cleanly
+                            api_headers = {
+                                **headers,
+                                "Accept": "application/json, text/plain, */*",
+                                "X-Requested-With": "XMLHttpRequest"
+                            }
+                            
+                            # Route 1: Modern Parent Ping Endpoint
+                            async with session.get("https://www.classcharts.com/api/v1/parent/ping", headers=api_headers) as api_response:
+                                if api_response.status == 200:
+                                    try:
+                                        json_data = await api_response.json()
+                                        
+                                        # FORCE TO ERROR LOGGER TO BYPASS FILTERS
+                                        _LOGGER.error("=== CLASS CHARTS PING API PAYLOAD ===")
+                                        _LOGGER.error(json.dumps(json_data))
+                                        
+                                        pupils_list = json_data.get("data", {}).get("pupils", []) or json_data.get("pupils", [])
+                                        if pupils_list and isinstance(pupils_list, list):
+                                            found_kids = {}
+                                            for p in pupils_list:
+                                                p_id = str(p.get("id") or p.get("pupil_id") or "")
+                                                p_name = p.get("name") or p.get("first_name", f"Student {p_id}")
+                                                if p_id:
+                                                    found_kids[p_id] = p_name.strip()
+                                            
+                                            if found_kids:
+                                                _LOGGER.info("Discovered Class Charts children via API v1: %s", found_kids)
+                                                return found_kids
+                                    except Exception as json_err:
+                                        _LOGGER.debug("API v1 parse skipped or failed: %s", json_err)
+
+                            # Route 2: Dedicated Explicit Pupils List Endpoint
+                            async with session.get("https://www.classcharts.com/api/v1/parent/pupils", headers=api_headers) as pupils_response:
+                                if pupils_response.status == 200:
+                                    try:
+                                        json_data = await pupils_response.json()
+                                        
+                                        # FORCE TO ERROR LOGGER TO BYPASS FILTERS
+                                        _LOGGER.error("=== CLASS CHARTS PUPILS API PAYLOAD ===")
+                                        _LOGGER.error(json.dumps(json_data))
+                                        
+                                        pupils_list = json_data.get("data", []) if isinstance(json_data.get("data"), list) else json_data.get("data", {}).get("pupils", [])
+                                        if not pupils_list and isinstance(json_data, list):
+                                            pupils_list = json_data
+
+                                        if pupils_list:
+                                            found_kids = {}
+                                            for p in pupils_list:
+                                                p_id = str(p.get("id") or "")
+                                                p_name = p.get("name") or p.get("first_name", f"Student {p_id}")
+                                                if p_id:
+                                                    found_kids[p_id] = p_name.strip()
+                                            if found_kids:
+                                                _LOGGER.info("Discovered Class Charts children via dedicated pupils API: %s", found_kids)
+                                                return found_kids
+                                    except Exception as json_err:
+                                        _LOGGER.debug("Dedicated pupils API parse skipped: %s", json_err)
+
+                            # Route 3: Traditional Base Ping Endpoint
+                            async with session.get("https://www.classcharts.com/parent/ping", headers=api_headers) as alt_response:
+                                if alt_response.status == 200:
+                                    try:
+                                        json_data = await alt_response.json()
+                                        
+                                        # FORCE TO ERROR LOGGER TO BYPASS FILTERS
+                                        _LOGGER.error("=== CLASS CHARTS LEGACY PING PAYLOAD ===")
+                                        _LOGGER.error(json.dumps(json_data))
+                                        
+                                        pupils_list = json_data.get("pupils", [])
+                                        if isinstance(pupils_list, list) and pupils_list:
+                                            found_kids = {str(p.get("id")): p.get("name", "").strip() for p in pupils_list if p.get("id")}
+                                            if found_kids:
+                                                _LOGGER.info("Discovered Class Charts children via legacy API: %s", found_kids)
+                                                return found_kids
+                                    except Exception as json_err:
+                                        _LOGGER.debug("Legacy API parse skipped or failed: %s", json_err)
+
+                            _LOGGER.error("Authenticated successfully, but API endpoints did not return an expected pupil array structure.")
+                            return {}
+                        else:
+                            _LOGGER.error(
+                                "Login handshake dropped. Status code returned: %s. Cookies caught: %s", 
+                                response.status, 
+                                list(response.cookies.keys())
+                            )
+                            return {}
+                            
+        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+            _LOGGER.error("Connection or timeout error while running student discovery: %s", err)
+            return {}
+        except Exception as err:
+            _LOGGER.exception(f"Unexpected crash during child array discovery sequence: {err}")
+            return {}
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry):
+        """Link the options flow to the config flow."""
+        return ClassChartsOptionsFlowHandler()
+
+
+class ClassChartsOptionsFlowHandler(config_entries.OptionsFlow):
+    """Handle options flow for Class Charts settings."""
+
+    async def async_step_init(self, user_input=None):
+        """Manage the actual settings menu."""
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        options = self.config_entry.options
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema({
+                vol.Optional(
+                    CONF_REFRESH_INTERVAL,
+                    default=options.get(CONF_REFRESH_INTERVAL, 24),
+                ): int,
+                vol.Optional(
+                    CONF_DAYS_TO_FETCH,
+                    default=options.get(CONF_DAYS_TO_FETCH, 14),
+                ): int,
+                vol.Optional(
+                    "show_completed_homework",
+                    default=options.get("show_completed_homework", True),
+                ): bool,
+                vol.Optional(
+                    CONF_SHOW_NO_SCHOOL,
+                    default=options.get(CONF_SHOW_NO_SCHOOL, True),
+                ): bool,
+            }),
+        )
