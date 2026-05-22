@@ -247,4 +247,31 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
             if isinstance(item, dict):
                 reason = item.get("reason") or item.get("name") or "Unknown"
                 points = int(item.get("score") or item.get("points") or 0)
-                teacher = item.get("
+                teacher = item.get("teacher") or item.get("teacher_name") or "Unknown"
+                timestamp = item.get("timestamp") or item.get("date") or "Unknown"
+
+                if points > 0:
+                    pos += points
+                    if this_week_pos == 0:
+                        this_week_pos += points
+                elif points < 0:
+                    neg += abs(points)
+                    if this_week_neg == 0:
+                        this_week_neg += abs(points)
+
+                slimmed_history.append({
+                    "reason": reason,
+                    "points": points,
+                    "teacher": teacher,
+                    "timestamp": timestamp
+                })
+
+        attrs["total_positive"] = pos
+        attrs["total_negative"] = neg
+        attrs["this_week_positive"] = this_week_pos
+        attrs["this_week_negative"] = this_week_neg
+        
+        if self._sensor_type == "breakdown":
+            attrs["points_history"] = slimmed_history
+
+        return attrs
