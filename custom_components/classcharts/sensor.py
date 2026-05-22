@@ -201,11 +201,17 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
                 for item in history:
                     if not isinstance(item, dict):
                         continue
+                    
+                    reason_str = item.get("reason") or item.get("name") or item.get("activity_name") or "Unknown"
+                    points_val = item.get("score") or item.get("points") or item.get("value") or 0
+                    teacher_str = item.get("teacher") or item.get("teacher_name") or item.get("staff_name") or "Unknown"
+                    timestamp_str = item.get("timestamp") or item.get("date") or "Unknown"
+
                     slimmed_history.append({
-                        "reason": item.get("reason"),
-                        "points": item.get("score", 0),
-                        "teacher": item.get("teacher"),
-                        "timestamp": item.get("timestamp") or item.get("date")
+                        "reason": reason_str,
+                        "points": points_val,
+                        "teacher": teacher_str,
+                        "timestamp": timestamp_str
                     })
             attrs["points_history"] = slimmed_history
 
