@@ -169,8 +169,17 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         if behaviour_resp.status_code == 200:
             try:
                 behaviour_json = behaviour_resp.json()
-                # Log the raw response keys to Home Assistant terminal logs for debugging
-                _LOGGER.debug("Class Charts V2 activity raw response keys: %s", list(behaviour_json.keys()))
+                
+                # Extended Diagnostic Log Lines
+                _LOGGER.debug("Class Charts Behaviour Raw Type: %s", type(behaviour_json))
+                if isinstance(behaviour_json, dict):
+                    _LOGGER.debug("Class Charts Behaviour Raw Keys: %s", list(behaviour_json.keys()))
+                    if "data" in behaviour_json:
+                        _LOGGER.debug("Class Charts 'data' sub-node Type: %s", type(behaviour_json["data"]))
+                        if isinstance(behaviour_json["data"], dict):
+                            _LOGGER.debug("Class Charts 'data' sub-node Keys: %s", list(behaviour_json["data"].keys()))
+                elif isinstance(behaviour_json, list):
+                    _LOGGER.debug("Class Charts Behaviour Raw is a List! Length: %s", len(behaviour_json))
                 
                 # Strip out the payload cleanly regardless of structural wraps
                 if isinstance(behaviour_json, dict):
@@ -184,8 +193,6 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
                     behaviour_data = {"history": behaviour_json}
             except Exception as parse_err:
                 _LOGGER.error("Failed parsing V2 behaviour data payload: %s", parse_err)
-        else:
-            _LOGGER.error("V2 Behaviour data retrieval failed with code: %s. Response: %s", behaviour_resp.status_code, behaviour_resp.text)
 
         # Standardized dictionary output back to the sensor platforms
         return {
