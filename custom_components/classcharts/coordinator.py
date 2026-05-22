@@ -13,7 +13,8 @@ from .const import (
     DOMAIN, 
     CONF_PUPIL_ID,
     CONF_DAYS_TO_FETCH,
-    HOMEWORK_URL
+    HOMEWORK_URL,
+    BEHAVIOUR_URL
 )
 
 _LOGGER = logging.getLogger(__name__)
