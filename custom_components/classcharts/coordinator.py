@@ -149,7 +149,6 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         behaviour_from = (datetime.date.today() - datetime.timedelta(days=365)).strftime("%Y-%m-%d")
         behaviour_to = datetime.date.today().strftime("%Y-%m-%d")
         
-        # We pass both common variations of the date query parameters to ensure compatibility
         query_params = {
             "from": behaviour_from,
             "to": behaviour_to,
@@ -170,18 +169,7 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
             try:
                 behaviour_json = behaviour_resp.json()
                 
-                # Extended Diagnostic Log Lines
                 _LOGGER.debug("Class Charts Behaviour Raw Type: %s", type(behaviour_json))
-                if isinstance(behaviour_json, dict):
-                    _LOGGER.debug("Class Charts Behaviour Raw Keys: %s", list(behaviour_json.keys()))
-                    if "data" in behaviour_json:
-                        _LOGGER.debug("Class Charts 'data' sub-node Type: %s", type(behaviour_json["data"]))
-                        if isinstance(behaviour_json["data"], dict):
-                            _LOGGER.debug("Class Charts 'data' sub-node Keys: %s", list(behaviour_json["data"].keys()))
-                elif isinstance(behaviour_json, list):
-                    _LOGGER.debug("Class Charts Behaviour Raw is a List! Length: %s", len(behaviour_json))
-                
-                # Strip out the payload cleanly regardless of structural wraps
                 if isinstance(behaviour_json, dict):
                     if "data" in behaviour_json:
                         behaviour_data = behaviour_json["data"]
@@ -215,12 +203,10 @@ class ClassChartsCoordinator(DataUpdateCoordinator):
         """Initialize the coordinator class."""
         self.entry = entry
         
-        # Read parameters out config entry storage
         self.email = entry.data["email"]
         self.password = entry.data["password"]
         self.pupil_id = entry.data[CONF_PUPIL_ID]
         
-        # Read update intervals safely with defaults
         refresh_interval = entry.options.get("refresh_interval", 24)
         self.days_to_fetch = entry.options.get(CONF_DAYS_TO_FETCH, 14)
 
