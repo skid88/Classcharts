@@ -146,47 +146,36 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
     @property
     def extract_events_and_timeline(self) -> tuple[list, list]:
         """Normalize both object models and raw dict layouts into standard lists."""
-        _LOGGER.warning("=== CLASSCHARTS DEBUG PAYLOAD: %s ===", self.coordinator.data)
-
-        if not self.coordinator.data:
+        if not self.coordinator.data or not isinstance(self.coordinator.data, dict):
             return [], []
 
-        # Safely fetch timeline/timetable days
-        timetable_data = self.coordinator.data.get("timetable", {})
-        
-        # If your code looks for behaviour points, handle its absence safely:
-        behaviour_data = self.coordinator.data.get("behaviour", {})
-        points = behaviour_data.get("total_points", 0) # Use a fallback default
-        
-        # Rest of your existing normalization logic goes here...
-        # Ensure nothing throws an error if 'behaviour' is missing.
-        return [], []
+        behaviour_node = self.coordinator.data.get("behaviour", {})
+        events = []
+        timeline = []
 
-            if isinstance(behaviour_node, dict):
-                events = (
-                    behaviour_node.get("history") 
-                    or behaviour_node.get("timeline") 
-                    or behaviour_node.get("data") 
-                    or []
-                )
-                if isinstance(events, dict):
-                    events = events.get("history") or events.get("timeline") or []
+        if isinstance(behaviour_node, dict):
+            # Try parsing explicit layout keys
+            events = (
+                behaviour_node.get("history") 
+                or behaviour_node.get("timeline") 
+                or behaviour_node.get("data") 
+                or []
+            )
+            if isinstance(events, dict):
+                events = events.get("history") or events.get("timeline") or []
 
-                timeline = (
-                    behaviour_node.get("timeline") 
-                    or behaviour_node.get("weekly") 
-                    or []
-                )
-                
-                if events == timeline and isinstance(events, list):
-                    if len(events) > 0 and "positive" in events[0]:
-                        events = []
-
-            return events or [], timeline or []
-
-        events = getattr(self.coordinator.data, "behaviour_events", [])
-        timeline = getattr(self.coordinator.data, "behaviour_timeline", [])
-        return events or [], timeline or []
+            timeline = (
+                behaviour_node.get("timeline") 
+                or behaviour_node.get("weekly") 
+                or []
+            )
+            
+            # De-duplicate cross-referenced keys safely
+            if events == timeline and isinstance(events, list):
+                if len(events) > 0 and "positive" in events[0]:
+                    events = []
+                    
+        return events if isinstance(events, list) else [], timeline if isinstance(timeline, list) else []
 
     @property
     def native_value(self):
@@ -258,31 +247,4 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
             if isinstance(item, dict):
                 reason = item.get("reason") or item.get("name") or "Unknown"
                 points = int(item.get("score") or item.get("points") or 0)
-                teacher = item.get("teacher") or item.get("teacher_name") or "Unknown"
-                timestamp = item.get("timestamp") or item.get("date") or "Unknown"
-
-                if points > 0:
-                    pos += points
-                    if this_week_pos == 0:
-                        this_week_pos += points
-                elif points < 0:
-                    neg += abs(points)
-                    if this_week_neg == 0:
-                        this_week_neg += abs(points)
-
-                slimmed_history.append({
-                    "reason": reason,
-                    "points": points,
-                    "teacher": teacher,
-                    "timestamp": timestamp
-                })
-
-        attrs["total_positive"] = pos
-        attrs["total_negative"] = neg
-        attrs["this_week_positive"] = this_week_pos
-        attrs["this_week_negative"] = this_week_neg
-        
-        if self._sensor_type == "breakdown":
-            attrs["points_history"] = slimmed_history
-
-        return attrs
+                teacher = item.get("
