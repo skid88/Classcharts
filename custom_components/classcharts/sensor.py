@@ -146,20 +146,21 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
     @property
     def extract_events_and_timeline(self) -> tuple[list, list]:
         """Normalize both object models and raw dict layouts into standard lists."""
-        # This will dump the actual structure into your logs:
         _LOGGER.warning("=== CLASSCHARTS DEBUG PAYLOAD: %s ===", self.coordinator.data)
 
         if not self.coordinator.data:
             return [], []
 
-        if isinstance(self.coordinator.data, dict):
-            behaviour_node = self.coordinator.data.get("behaviour")
-            
-            if isinstance(behaviour_node, dict) and "data" in behaviour_node:
-                behaviour_node = behaviour_node["data"]
-
-            events = []
-            timeline = []
+        # Safely fetch timeline/timetable days
+        timetable_data = self.coordinator.data.get("timetable", {})
+        
+        # If your code looks for behaviour points, handle its absence safely:
+        behaviour_data = self.coordinator.data.get("behaviour", {})
+        points = behaviour_data.get("total_points", 0) # Use a fallback default
+        
+        # Rest of your existing normalization logic goes here...
+        # Ensure nothing throws an error if 'behaviour' is missing.
+        return [], []
 
             if isinstance(behaviour_node, dict):
                 events = (
