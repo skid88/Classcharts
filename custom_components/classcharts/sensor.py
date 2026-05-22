@@ -1,6 +1,6 @@
 from __future__ import annotations
 import logging
-from datetime import datetime
+from datetime import datetime, date
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -24,6 +24,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         CCBehaviourSensor(coordinator, entry, "Behaviour Points", "breakdown"),
         CCBehaviourSensor(coordinator, entry, "Latest Behaviour Update", "latest_date")
     ])
+
 
 class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
     """Sensor for Homework stats with attribute list for Markdown."""
@@ -92,6 +93,7 @@ class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
 
         return {"homework_list": slimmed_homework_list}
 
+
 class CCLessonSensor(CoordinatorEntity, SensorEntity):
     """Sensor for Lessons."""
     
@@ -109,16 +111,47 @@ class CCLessonSensor(CoordinatorEntity, SensorEntity):
         }
 
     @property
+    def native_value(self):
+        """Placeholder for lesson state logic."""
+        return "Unknown"
+
+
+class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
+    """Sensor tracking behaviour points balance, metrics, and timeline updates."""
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:star-circle"
+
+    def __init__(self, coordinator, entry, name, sensor_type) -> None:
+        super().__init__(coordinator)
+        self._sensor_type = sensor_type
+        student_label = entry.data.get("student_name") or entry.data.get("pupil_id")
+        self._attr_name = name
+        self._attr_unique_id = f"{entry.entry_id}_behaviour_{sensor_type}"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, entry.entry_id)}, 
+            "name": f"Class Charts ({student_label})"
+        }
+        
+        # Adjust device and state classes depending on whether it's a date tracker or counter
+        if self._sensor_type == "latest_date":
+            self._attr_device_class = "date"
+            self._attr_native_unit_of_measurement = None
+            self._attr_state_class = None
+        else:
+            self._attr_device_class = None
+            self._attr_native_unit_of_measurement = "pts"
+            self._attr_state_class = "measurement"
+
+    @property
     def extract_events_and_timeline(self) -> tuple[list, list]:
         """Normalize both object models and raw dict layouts into standard lists."""
         if not self.coordinator.data:
             return [], []
 
         if isinstance(self.coordinator.data, dict):
-            # Target our data node safely
             behaviour_node = self.coordinator.data.get("behaviour")
             
-            # If the node is wrapped inside another dictionary level, look deeper
             if isinstance(behaviour_node, dict) and "data" in behaviour_node:
                 behaviour_node = behaviour_node["data"]
 
@@ -126,7 +159,6 @@ class CCLessonSensor(CoordinatorEntity, SensorEntity):
             timeline = []
 
             if isinstance(behaviour_node, dict):
-                # Pull granular points history list
                 events = (
                     behaviour_node.get("history") 
                     or behaviour_node.get("timeline") 
@@ -136,72 +168,16 @@ class CCLessonSensor(CoordinatorEntity, SensorEntity):
                 if isinstance(events, dict):
                     events = events.get("history") or events.get("timeline") or []
 
-                # Pull historical timeline totals block
                 timeline = (
                     behaviour_node.get("timeline") 
                     or behaviour_node.get("weekly") 
                     or []
                 )
                 
-                # Double-check we aren't duplicating arrays if history was swapped
                 if events == timeline and isinstance(events, list):
                     if len(events) > 0 and "positive" in events[0]:
                         events = []
 
-            return events or [], timeline or []
-
-        # Object-based structural fallback model
-        events = getattr(self.coordinator.data, "behaviour_events", [])
-        timeline = getattr(self.coordinator.data, "behaviour_timeline", [])
-        return events or [], timeline or []
-
-class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
-    """Robust, multi-structure adapter for tracking behavior metrics."""
-
-    _attr_has_entity_name = True
-
-    def __init__(self, coordinator, entry, name, sensor_type):
-        super().__init__(coordinator)
-        self._sensor_type = sensor_type
-        student_label = entry.data.get("student_name") or entry.data.get("pupil_id")
-        
-        self._attr_name = name
-        self._attr_unique_id = f"{entry.entry_id}_behaviour_{sensor_type}"
-        self._attr_icon = "mdi:star-circle" if sensor_type == "balance" else "mdi:counter"
-        
-        if sensor_type == "latest_date":
-            self._attr_device_class = "date"
-        else:
-            self._attr_native_unit_of_measurement = "Points"
-
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, entry.entry_id)}, 
-            "name": f"Class Charts ({student_label})"
-        }
-
-    @property
-    def extract_events_and_timeline(self) -> tuple[list, list]:
-        """Normalize both object models and raw dict layouts into standard lists."""
-        if not self.coordinator.data:
-            return [], []
-
-        if isinstance(self.coordinator.data, dict):
-            behaviour_node = self.coordinator.data.get("behaviour", self.coordinator.data)
-            
-            events = []
-            if hasattr(behaviour_node, "behaviour_events"):
-                events = getattr(behaviour_node, "behaviour_events", [])
-            elif isinstance(behaviour_node, dict):
-                events = behaviour_node.get("history") or behaviour_node.get("timeline") or behaviour_node.get("data") or []
-                if isinstance(events, dict):
-                    events = events.get("history") or events.get("timeline") or []
-
-            timeline = []
-            if hasattr(behaviour_node, "behaviour_timeline"):
-                timeline = getattr(behaviour_node, "behaviour_timeline", [])
-            elif isinstance(behaviour_node, dict):
-                timeline = behaviour_node.get("timeline") or behaviour_node.get("weekly") or []
-                
             return events or [], timeline or []
 
         events = getattr(self.coordinator.data, "behaviour_events", [])
@@ -211,10 +187,9 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         """Calculate state outputs across all fallback modes seamlessly."""
-        from datetime import date
         events, timeline = self.extract_events_and_timeline
 
-        # 1. PROFILE: Latest Update Date
+        # 1. Latest Update Date Tracker
         if self._sensor_type == "latest_date":
             for e in events:
                 if isinstance(e, dict) and (e.get("timestamp") or e.get("date")):
@@ -230,17 +205,15 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
                         continue
             return None
 
-        # 2. PROFILE: Point Metric Logic
+        # 2. Point Metric Logic
         pos, neg = 0, 0
         
-        # Fallback Mode: If events history array is missing, calculate from timeline totals
         if not events and timeline:
             for week in timeline:
                 if isinstance(week, dict):
                     pos += int(week.get("positive") or week.get("score") or 0)
                     neg += int(week.get("negative") or 0)
         else:
-            # Standard Mode: Sum up itemized list entries
             for item in events:
                 if isinstance(item, dict):
                     score = int(item.get("score") or item.get("points") or item.get("value") or 0)
@@ -257,7 +230,6 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict:
         """Map points history and weekly bounds cleanly to state attributes."""
-        from datetime import date
         attrs = {}
         events, timeline = self.extract_events_and_timeline
         today = date.today()
