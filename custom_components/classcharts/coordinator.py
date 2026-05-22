@@ -145,26 +145,40 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         else:
             _LOGGER.error("V2 Homework data retrieval failed with code: %s", hw_resp.status_code)
 
-       # 6. Fetch Updated V2 Behaviour Data (Rolling Academic Year Window)
+       # 6. Fetch Updated V2 Behaviour Data (Robust Parameters)
         behaviour_from = (datetime.date.today() - datetime.timedelta(days=365)).strftime("%Y-%m-%d")
         behaviour_to = datetime.date.today().strftime("%Y-%m-%d")
         
+        # We pass both common variations of the date query parameters to ensure compatibility
+        query_params = {
+            "from": behaviour_from,
+            "to": behaviour_to,
+            "date_from": behaviour_from,
+            "date_to": behaviour_to
+        }
+        
+        _LOGGER.debug("Requesting Class Charts activity data from %s to %s", behaviour_from, behaviour_to)
+        
         behaviour_resp = session.get(
             f"{BEHAVIOUR_URL}/{pupil_id}",
-            params={"from": behaviour_from, "to": behaviour_to},
+            params=query_params,
             timeout=10
         )
         
         behaviour_data = {}
         if behaviour_resp.status_code == 200:
             try:
-                # Class Charts V2 returns this inside a top level {"success": 1, "data": {...}} wrapper
                 behaviour_json = behaviour_resp.json()
-                behaviour_data = behaviour_json.get("data", {})
+                # Log the raw response keys to Home Assistant terminal logs for debugging
+                _LOGGER.debug("Class Charts V2 activity raw response keys: %s", list(behaviour_json.keys()))
+                
+                # Sniff out where the payload array is hiding
+                if isinstance(behaviour_json, dict):
+                    behaviour_data = behaviour_json.get("data", behaviour_json)
             except Exception as parse_err:
                 _LOGGER.error("Failed parsing V2 behaviour data payload: %s", parse_err)
         else:
-            _LOGGER.error("V2 Behaviour data retrieval failed with code: %s", behaviour_resp.status_code)
+            _LOGGER.error("V2 Behaviour data retrieval failed with code: %s. Response: %s", behaviour_resp.status_code, behaviour_resp.text)
         return {
             "timetable": full_schedule,
             "homework": homework_data,
