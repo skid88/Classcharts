@@ -145,7 +145,7 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         else:
             _LOGGER.error("V2 Homework data retrieval failed with code: %s", hw_resp.status_code)
 
-        # 6. Fetch Updated V2 Behaviour Data (Rolling Academic Year Window)
+       # 6. Fetch Updated V2 Behaviour Data (Rolling Academic Year Window)
         behaviour_from = (datetime.date.today() - datetime.timedelta(days=365)).strftime("%Y-%m-%d")
         behaviour_to = datetime.date.today().strftime("%Y-%m-%d")
         
@@ -158,13 +158,13 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         behaviour_data = {}
         if behaviour_resp.status_code == 200:
             try:
+                # Class Charts V2 returns this inside a top level {"success": 1, "data": {...}} wrapper
                 behaviour_json = behaviour_resp.json()
                 behaviour_data = behaviour_json.get("data", {})
             except Exception as parse_err:
                 _LOGGER.error("Failed parsing V2 behaviour data payload: %s", parse_err)
         else:
             _LOGGER.error("V2 Behaviour data retrieval failed with code: %s", behaviour_resp.status_code)
-
         return {
             "timetable": full_schedule,
             "homework": homework_data,
