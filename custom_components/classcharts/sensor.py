@@ -146,6 +146,9 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
     @property
     def extract_events_and_timeline(self) -> tuple[list, list]:
         """Normalize both object models and raw dict layouts into standard lists."""
+        # This will dump the actual structure into your logs:
+        _LOGGER.warning("=== CLASSCHARTS DEBUG PAYLOAD: %s ===", self.coordinator.data)
+
         if not self.coordinator.data:
             return [], []
 
