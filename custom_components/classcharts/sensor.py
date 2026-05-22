@@ -140,7 +140,7 @@ class CCLessonSensor(CoordinatorEntity, SensorEntity):
         return "Free"
 
 class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
-    """Sensor for Tracking Behaviour points matching the pupil_data model."""
+    """Robust, multi-structure adapter for tracking behavior metrics."""
 
     _attr_has_entity_name = True
 
@@ -153,7 +153,6 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
         self._attr_unique_id = f"{entry.entry_id}_behaviour_{sensor_type}"
         self._attr_icon = "mdi:star-circle" if sensor_type == "balance" else "mdi:counter"
         
-        # Configure units dynamically based on what the sensor state shows
         if sensor_type == "latest_date":
             self._attr_device_class = "date"
         else:
@@ -165,104 +164,129 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
         }
 
     @property
-    def pupil_data(self):
-        """Helper property to safely check data structure variations."""
-        if not self.coordinator.data or not isinstance(self.coordinator.data, dict):
-            return None
-        # Fallback helper to grab the data object handled by your custom model classes
-        return self.coordinator.data.get("behaviour") or self.coordinator.data
+    def extract_events_and_timeline(self) -> tuple[list, list]:
+        """Normalize both object models and raw dict layouts into standard lists."""
+        if not self.coordinator.data:
+            return [], []
+
+        # Step A: Is it a nested dictionary?
+        if isinstance(self.coordinator.data, dict):
+            behaviour_node = self.coordinator.data.get("behaviour", self.coordinator.data)
+            
+            # Extract events/history list
+            events = []
+            if hasattr(behaviour_node, "behaviour_events"):
+                events = getattr(behaviour_node, "behaviour_events", [])
+            elif isinstance(behaviour_node, dict):
+                events = behaviour_node.get("history") or behaviour_node.get("timeline") or behaviour_node.get("data") or []
+                if isinstance(events, dict):
+                    events = events.get("history") or events.get("timeline") or []
+
+            # Extract timeline list
+            timeline = []
+            if hasattr(behaviour_node, "behaviour_timeline"):
+                timeline = getattr(behaviour_node, "behaviour_timeline", [])
+            elif isinstance(behaviour_node, dict):
+                timeline = behaviour_node.get("timeline") or behaviour_node.get("weekly") or []
+                
+            return events or [], timeline or []
+
+        # Step B: Fallback if coordinator.data itself is an object
+        events = getattr(self.coordinator.data, "behaviour_events", [])
+        timeline = getattr(self.coordinator.data, "behaviour_timeline", [])
+        return events or [], timeline or []
 
     @property
     def native_value(self):
-        """Return values matching the specific entity profiles."""
-        from datetime import datetime, date
-        data = self.pupil_data
-        if not data:
-            return 0 if self._sensor_type != "latest_date" else None
+        """Calculate state outputs across all fallback modes."""
+        from datetime import date
+        events, timeline = self.extract_events_and_timeline
 
-        # Fetch underlying lists safely out of your existing model architecture
-        events = getattr(data, "behaviour_events", []) or []
-        timeline = getattr(data, "behaviour_timeline", []) or []
-
-        # 1. PROFILE: Latest Point Date Sensor
+        # 1. PROFILE: Latest Update Date
         if self._sensor_type == "latest_date":
-            if events:
-                latest = next((e for e in events if isinstance(e, dict) and e.get("timestamp")), None)
-                if latest is not None:
+            for e in events:
+                if isinstance(e, dict) and (e.get("timestamp") or e.get("date")):
                     try:
-                        return date.fromisoformat(latest["timestamp"][:10])
-                    except (ValueError, TypeError):
-                        pass
-            if timeline:
-                for week in reversed(timeline):
-                    if isinstance(week, dict) and week.get("end"):
-                        try:
-                            return date.fromisoformat(week["end"])
-                        except (ValueError, TypeError):
-                            continue
+                        return date.fromisoformat((e.get("timestamp") or e.get("date"))[:10])
+                    except:
+                        continue
+            for w in reversed(timeline):
+                if isinstance(w, dict) and w.get("end"):
+                    try:
+                        return date.fromisoformat(w["end"])
+                    except:
+                        continue
             return None
 
-        # 2. CALCULATE MATH: Loop through items to resolve all-time point scores
-        all_time_pos = 0
-        all_time_neg = 0
-        if isinstance(events, list):
-            for item in events:
-                if not isinstance(item, dict):
-                    continue
+        # 2. PROFILE: Point Metric Logic
+        pos, neg = 0, 0
+        for item in events:
+            if isinstance(item, dict):
                 score = int(item.get("score") or item.get("points") or item.get("value") or 0)
                 if score > 0:
-                    all_time_pos += score
+                    pos += score
                 elif score < 0:
-                    all_time_neg += abs(score)
+                    neg += abs(score)
 
         if self._sensor_type == "balance":
-            return all_time_pos - all_time_neg
-        return all_time_pos
+            return pos - neg
+        return pos
 
     @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Expose current week totals alongside full raw feed history listings."""
-        from datetime import datetime, date
+    def extra_state_attributes(self) -> dict:
+        """Map points history and weekly bounds cleanly to state attributes."""
+        from datetime import date
         attrs = {}
-        data = self.pupil_data
-        if not data:
-            return attrs
-
-        events = getattr(data, "behaviour_events", []) or []
-        timeline = getattr(data, "behaviour_timeline", []) or []
+        events, timeline = self.extract_events_and_timeline
         today = date.today()
 
-        # Calculate this week's active scope totals from timeline entries
-        this_week_positive = 0
-        this_week_negative = 0
-        for week in timeline:
-            if not isinstance(week, dict):
-                continue
-            try:
-                start = date.fromisoformat(week.get("start", ""))
-                end = date.fromisoformat(week.get("end", ""))
-                if start <= today <= end:
-                    this_week_positive = week.get("positive", 0)
-                    this_week_negative = week.get("negative", 0)
-                    break
-            except (ValueError, TypeError):
-                continue
-
-        attrs["this_week_positive"] = this_week_positive
-        attrs["this_week_negative"] = this_week_negative
-
-        # Build clean historical state attributes for UI components
+        pos, neg = 0, 0
+        this_week_pos, this_week_neg = 0, 0
         slimmed_history = []
-        if isinstance(events, list):
-            for item in events:
-                if not isinstance(item, dict):
+
+        # Parse weekly data matrix out of timeline if provided natively
+        for week in timeline:
+            if isinstance(week, dict):
+                try:
+                    start = date.fromisoformat(week.get("start", ""))
+                    end = date.fromisoformat(week.get("end", ""))
+                    if start <= today <= end:
+                        this_week_pos = week.get("positive") or week.get("score", 0)
+                        this_week_neg = week.get("negative") or 0
+                        break
+                except:
                     continue
+
+        # Extract structural items out into markdown card variables
+        for item in events:
+            if isinstance(item, dict):
+                reason = item.get("reason") or item.get("name") or "Unknown"
+                points = int(item.get("score") or item.get("points") or 0)
+                teacher = item.get("teacher") or item.get("teacher_name") or "Unknown"
+                timestamp = item.get("timestamp") or item.get("date") or "Unknown"
+
+                if points > 0:
+                    pos += points
+                    if this_week_pos == 0:  # Fallback approximation helper
+                        this_week_pos += points
+                elif points < 0:
+                    neg += abs(points)
+                    if this_week_neg == 0:
+                        this_week_neg += abs(points)
+
                 slimmed_history.append({
-                    "reason": item.get("reason") or item.get("name") or "Unknown",
-                    "points": item.get("score") or item.get("points") or 0,
-                    "teacher": item.get("teacher") or item.get("teacher_name") or "Unknown",
-                    "timestamp": item.get("timestamp") or item.get("date") or "Unknown"
+                    "reason": reason,
+                    "points": points,
+                    "teacher": teacher,
+                    "timestamp": timestamp
                 })
 
-        attrs["points_history"] = slimmed_history
+        attrs["total_positive"] = pos
+        attrs["total_negative"] = neg
+        attrs["this_week_positive"] = this_week_pos
+        attrs["this_week_negative"] = this_week_neg
+        
+        if self._sensor_type == "breakdown":
+            attrs["points_history"] = slimmed_history
+
         return attrs
