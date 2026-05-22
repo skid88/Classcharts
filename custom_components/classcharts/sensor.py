@@ -33,12 +33,12 @@ class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator)
         self._key = key
         student_label = entry.data.get("student_name") or entry.data.get("pupil_id")
-        
-        self._attr_name = f"{student_label} {name}"
+        self._attr_name = name
         self._attr_unique_id = f"{entry.entry_id}_hw_{key}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)}, 
             "name": f"Class Charts ({student_label})"
+        }
         }
 
     @property
@@ -101,8 +101,7 @@ class CCLessonSensor(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator)
         self._type = type
         student_label = entry.data.get("student_name") or entry.data.get("pupil_id")
-        
-        self._attr_name = f"{student_label} {type.capitalize()} Lesson"
+        self._attr_name = f"{type.capitalize()} Lesson"
         self._attr_unique_id = f"{entry.entry_id}_lesson_{type}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)}, 
@@ -148,8 +147,7 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator)
         self._sensor_type = sensor_type
         student_label = entry.data.get("student_name") or entry.data.get("pupil_id")
-        
-        self._attr_name = f"{student_label} {name}"
+        self._attr_name = name
         self._attr_unique_id = f"{entry.entry_id}_behaviour_{sensor_type}"
         self._attr_icon = "mdi:star-circle" if sensor_type == "balance" else "mdi:counter"
         self._attr_native_unit_of_measurement = "Points"
