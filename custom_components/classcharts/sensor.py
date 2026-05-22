@@ -21,7 +21,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
         CCLessonSensor(coordinator, entry, "current"),
         CCLessonSensor(coordinator, entry, "next"),
         CCBehaviourSensor(coordinator, entry, "Behaviour Balance", "balance"),
-        CCBehaviourSensor(coordinator, entry, "Behaviour Points", "breakdown")
+        CCBehaviourSensor(coordinator, entry, "Behaviour Points", "breakdown"),
+        CCBehaviourSensor(coordinator, entry, "Latest Behaviour Update", "latest_date")
     ])
 
 class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
