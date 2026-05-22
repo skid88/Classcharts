@@ -109,34 +109,51 @@ class CCLessonSensor(CoordinatorEntity, SensorEntity):
         }
 
     @property
-    def native_value(self):
-        now = dt_util.now()
-        today_str = now.strftime("%Y-%m-%d")
-        timetable = self.coordinator.data.get("timetable", {})
-        today_lessons = timetable.get(today_str, [])
-        
-        parsed = []
-        for l in today_lessons:
-            try:
-                start_naive = datetime.fromisoformat(l["start_time"])
-                end_naive = datetime.fromisoformat(l["end_time"])
-                l["dt_start"] = dt_util.as_local(start_naive)
-                l["dt_end"] = dt_util.as_local(end_naive)
-                parsed.append(l)
-            except:
-                continue
-        
-        parsed.sort(key=lambda x: x["dt_start"])
-        
-        if self._type == "current":
-            for l in parsed:
-                if l["dt_start"] <= now <= l["dt_end"]:
-                    return l["subject_name"]
-        else:
-            for l in parsed:
-                if l["dt_start"] > now:
-                    return l["subject_name"]
-        return "Free"
+    def extract_events_and_timeline(self) -> tuple[list, list]:
+        """Normalize both object models and raw dict layouts into standard lists."""
+        if not self.coordinator.data:
+            return [], []
+
+        if isinstance(self.coordinator.data, dict):
+            # Target our data node safely
+            behaviour_node = self.coordinator.data.get("behaviour")
+            
+            # If the node is wrapped inside another dictionary level, look deeper
+            if isinstance(behaviour_node, dict) and "data" in behaviour_node:
+                behaviour_node = behaviour_node["data"]
+
+            events = []
+            timeline = []
+
+            if isinstance(behaviour_node, dict):
+                # Pull granular points history list
+                events = (
+                    behaviour_node.get("history") 
+                    or behaviour_node.get("timeline") 
+                    or behaviour_node.get("data") 
+                    or []
+                )
+                if isinstance(events, dict):
+                    events = events.get("history") or events.get("timeline") or []
+
+                # Pull historical timeline totals block
+                timeline = (
+                    behaviour_node.get("timeline") 
+                    or behaviour_node.get("weekly") 
+                    or []
+                )
+                
+                # Double-check we aren't duplicating arrays if history was swapped
+                if events == timeline and isinstance(events, list):
+                    if len(events) > 0 and "positive" in events[0]:
+                        events = []
+
+            return events or [], timeline or []
+
+        # Object-based structural fallback model
+        events = getattr(self.coordinator.data, "behaviour_events", [])
+        timeline = getattr(self.coordinator.data, "behaviour_timeline", [])
+        return events or [], timeline or []
 
 class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
     """Robust, multi-structure adapter for tracking behavior metrics."""
