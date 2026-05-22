@@ -186,11 +186,9 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
         if not self.coordinator.data:
             return [], []
 
-        # Step A: Is it a nested dictionary?
         if isinstance(self.coordinator.data, dict):
             behaviour_node = self.coordinator.data.get("behaviour", self.coordinator.data)
             
-            # Extract events/history list
             events = []
             if hasattr(behaviour_node, "behaviour_events"):
                 events = getattr(behaviour_node, "behaviour_events", [])
@@ -199,7 +197,6 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
                 if isinstance(events, dict):
                     events = events.get("history") or events.get("timeline") or []
 
-            # Extract timeline list
             timeline = []
             if hasattr(behaviour_node, "behaviour_timeline"):
                 timeline = getattr(behaviour_node, "behaviour_timeline", [])
@@ -208,14 +205,13 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
                 
             return events or [], timeline or []
 
-        # Step B: Fallback if coordinator.data itself is an object
         events = getattr(self.coordinator.data, "behaviour_events", [])
         timeline = getattr(self.coordinator.data, "behaviour_timeline", [])
         return events or [], timeline or []
 
     @property
     def native_value(self):
-        """Calculate state outputs across all fallback modes."""
+        """Calculate state outputs across all fallback modes seamlessly."""
         from datetime import date
         events, timeline = self.extract_events_and_timeline
 
@@ -237,16 +233,26 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
 
         # 2. PROFILE: Point Metric Logic
         pos, neg = 0, 0
-        for item in events:
-            if isinstance(item, dict):
-                score = int(item.get("score") or item.get("points") or item.get("value") or 0)
-                if score > 0:
-                    pos += score
-                elif score < 0:
-                    neg += abs(score)
+        
+        # Fallback Mode: If events history array is missing, calculate from timeline totals
+        if not events and timeline:
+            for week in timeline:
+                if isinstance(week, dict):
+                    pos += int(week.get("positive") or week.get("score") or 0)
+                    neg += int(week.get("negative") or 0)
+        else:
+            # Standard Mode: Sum up itemized list entries
+            for item in events:
+                if isinstance(item, dict):
+                    score = int(item.get("score") or item.get("points") or item.get("value") or 0)
+                    if score > 0:
+                        pos += score
+                    elif score < 0:
+                        neg += abs(score)
 
         if self._sensor_type == "balance":
             return pos - neg
+            
         return pos
 
     @property
@@ -261,7 +267,6 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
         this_week_pos, this_week_neg = 0, 0
         slimmed_history = []
 
-        # Parse weekly data matrix out of timeline if provided natively
         for week in timeline:
             if isinstance(week, dict):
                 try:
@@ -274,7 +279,6 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
                 except:
                     continue
 
-        # Extract structural items out into markdown card variables
         for item in events:
             if isinstance(item, dict):
                 reason = item.get("reason") or item.get("name") or "Unknown"
@@ -284,7 +288,7 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
 
                 if points > 0:
                     pos += points
-                    if this_week_pos == 0:  # Fallback approximation helper
+                    if this_week_pos == 0:
                         this_week_pos += points
                 elif points < 0:
                     neg += abs(points)
