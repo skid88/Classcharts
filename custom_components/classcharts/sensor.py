@@ -19,29 +19,23 @@ async def async_setup_entry(hass, entry, async_add_entities):
         CCHomeworkSensor(coordinator, entry, "Homework Due", "this_week_due_count"),
         CCHomeworkSensor(coordinator, entry, "Completed Homework", "this_week_completed_count"),
         CCLessonSensor(coordinator, entry, "current"),
-        CCLessonSensor(coordinator, entry, "next")
+        CCLessonSensor(coordinator, entry, "next"),
+        CCBehaviourSensor(coordinator, entry, "Behaviour Balance", "balance"),
+        CCBehaviourSensor(coordinator, entry, "Behaviour Points", "breakdown")
     ])
 
 class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
     """Sensor for Homework stats with attribute list for Markdown."""
     
-    # Force Home Assistant to handle clean dynamic entity ID names automatically
     _attr_has_entity_name = True
 
     def __init__(self, coordinator, entry, name, key):
         super().__init__(coordinator)
         self._key = key
-        
-        # 1. Grab the dynamic student name from your new config flow
         student_label = entry.data.get("student_name") or entry.data.get("pupil_id")
         
-        # 2. Dynamic Friendly Name for the UI
         self._attr_name = f"{student_label} {name}"
-        
-        # 3. Unique system ID to guarantee zero database collisions
         self._attr_unique_id = f"{entry.entry_id}_hw_{key}"
-        
-        # 4. Brand the Device Card uniquely after the student
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)}, 
             "name": f"Class Charts ({student_label})"
@@ -76,7 +70,6 @@ class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
             return {"homework_list": []}
 
         slimmed_homework_list = []
-        
         for item in raw_homework_list:
             if not isinstance(item, dict):
                 continue
@@ -107,15 +100,10 @@ class CCLessonSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry, type):
         super().__init__(coordinator)
         self._type = type
-        
-        # 1. Grab the dynamic student name from your new config flow
         student_label = entry.data.get("student_name") or entry.data.get("pupil_id")
         
-        # 2. Dynamic Friendly Name for the UI
         self._attr_name = f"{student_label} {type.capitalize()} Lesson"
         self._attr_unique_id = f"{entry.entry_id}_lesson_{type}"
-        
-        # 3. Brand the Device Card uniquely after the student
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)}, 
             "name": f"Class Charts ({student_label})"
@@ -150,3 +138,77 @@ class CCLessonSensor(CoordinatorEntity, SensorEntity):
                 if l["dt_start"] > now:
                     return l["subject_name"]
         return "Free"
+
+class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
+    """Sensor for Tracking dynamic Behaviour points analytics."""
+
+    _attr_has_entity_name = True
+
+    def __init__(self, coordinator, entry, name, sensor_type):
+        super().__init__(coordinator)
+        self._sensor_type = sensor_type
+        student_label = entry.data.get("student_name") or entry.data.get("pupil_id")
+        
+        self._attr_name = f"{student_label} {name}"
+        self._attr_unique_id = f"{entry.entry_id}_behaviour_{sensor_type}"
+        self._attr_icon = "mdi:star-circle" if sensor_type == "balance" else "mdi:counter"
+        self._attr_native_unit_of_measurement = "Points"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, entry.entry_id)}, 
+            "name": f"Class Charts ({student_label})"
+        }
+
+    @property
+    def native_value(self):
+        """Extract net configurations out of the core data frame."""
+        if not self.coordinator.data or not isinstance(self.coordinator.data, dict):
+            return 0
+
+        behaviour = self.coordinator.data.get("behaviour", {})
+        if not isinstance(behaviour, dict):
+            return 0
+
+        pos = int(behaviour.get("total_positive", 0))
+        neg = int(behaviour.get("total_negative", 0))
+
+        if self._sensor_type == "balance":
+            return pos - neg
+        return pos
+
+    @property
+    def extra_state_attributes(self):
+        """Map historical entries out into individual markdown elements."""
+        if not self.coordinator.data or not isinstance(self.coordinator.data, dict):
+            return {}
+
+        behaviour = self.coordinator.data.get("behaviour", {})
+        if not isinstance(behaviour, dict):
+            return {}
+
+        pos = int(behaviour.get("total_positive", 0))
+        neg = int(behaviour.get("total_negative", 0))
+
+        # Build clean historical state attributes for UI components
+        attrs = {
+            "total_positive": pos,
+            "total_negative": neg,
+        }
+
+        # Keep trace arrays mapped to the main points breakout sensor
+        if self._sensor_type == "breakdown":
+            history = behaviour.get("history", []) or behaviour.get("timeline", [])
+            slimmed_history = []
+            
+            if isinstance(history, list):
+                for item in history:
+                    if not isinstance(item, dict):
+                        continue
+                    slimmed_history.append({
+                        "reason": item.get("reason"),
+                        "points": item.get("score", 0),
+                        "teacher": item.get("teacher"),
+                        "timestamp": item.get("timestamp") or item.get("date")
+                    })
+            attrs["points_history"] = slimmed_history
+
+        return attrs
