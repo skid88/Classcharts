@@ -39,7 +39,7 @@ class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
             "identifiers": {(DOMAIN, entry.entry_id)}, 
             "name": f"Class Charts ({student_label})"
         }
-        }
+        
 
     @property
     def native_value(self):
