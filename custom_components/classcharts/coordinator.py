@@ -36,7 +36,6 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
     })
     
     try:
-        
         session.headers.update({"Content-Type": "application/x-www-form-urlencoded"})
         login_payload = {
             "_method": "POST",
@@ -97,7 +96,7 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         except ValueError:
             pass
 
-        # 4.Fetch Updated V2 Timetable Data
+        # 4. Fetch Updated V2 Timetable Data
         full_schedule = {}
         for i in range(days_to_fetch):
             target_date = datetime.date.today() + datetime.timedelta(days=i)
@@ -124,9 +123,6 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         hw_from = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         hw_to = (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y-%m-%d")
         
-        # Updated V2 path mapping
-        hw_from = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-        hw_to = (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y-%m-%d")
         hw_resp = session.get(
             f"{HOMEWORK_URL}/{pupil_id}",
             params={"display_date": "due_date", "from": hw_from, "to": hw_to},
@@ -140,7 +136,6 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
                 if isinstance(hw_json, list):
                     homework_data = {"data": hw_json, "meta": {}}
                 elif isinstance(hw_json, dict):
-                    # Ensure homework payload maps smoothly out of nested data wrappers
                     if "data" in hw_json:
                         homework_data = hw_json
                     else:
@@ -150,9 +145,30 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         else:
             _LOGGER.error("V2 Homework data retrieval failed with code: %s", hw_resp.status_code)
 
+        # 6. Fetch Updated V2 Behaviour Data (Rolling Academic Year Window)
+        behaviour_from = (datetime.date.today() - datetime.timedelta(days=365)).strftime("%Y-%m-%d")
+        behaviour_to = datetime.date.today().strftime("%Y-%m-%d")
+        
+        behaviour_resp = session.get(
+            f"{BEHAVIOUR_URL}/{pupil_id}",
+            params={"from": behaviour_from, "to": behaviour_to},
+            timeout=10
+        )
+        
+        behaviour_data = {}
+        if behaviour_resp.status_code == 200:
+            try:
+                behaviour_json = behaviour_resp.json()
+                behaviour_data = behaviour_json.get("data", {})
+            except Exception as parse_err:
+                _LOGGER.error("Failed parsing V2 behaviour data payload: %s", parse_err)
+        else:
+            _LOGGER.error("V2 Behaviour data retrieval failed with code: %s", behaviour_resp.status_code)
+
         return {
             "timetable": full_schedule,
             "homework": homework_data,
+            "behaviour": behaviour_data,
         }
 
     except Exception as err:
