@@ -199,3 +199,37 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         raise UpdateFailed(f"Error communicating with V2 API: {err}")
     finally:
         session.close()
+
+
+class ClassChartsCoordinator(DataUpdateCoordinator):
+    """The wrapper class Home Assistant uses to schedule updates."""
+
+    def __init__(self, hass: HomeAssistant, entry):
+        """Initialize the coordinator class."""
+        self.entry = entry
+        
+        # Read parameters out config entry storage
+        self.email = entry.data["email"]
+        self.password = entry.data["password"]
+        self.pupil_id = entry.data[CONF_PUPIL_ID]
+        
+        # Read update intervals safely with defaults
+        refresh_interval = entry.options.get("refresh_interval", 24)
+        self.days_to_fetch = entry.options.get(CONF_DAYS_TO_FETCH, 14)
+
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=DOMAIN,
+            update_interval=timedelta(hours=refresh_interval),
+        )
+
+    async def _async_update_data(self):
+        """Route the async coordinator request down to our sync fetch loop."""
+        return await self.hass.async_add_executor_job(
+            sync_get_classcharts_data,
+            self.email,
+            self.password,
+            self.pupil_id,
+            self.days_to_fetch
+        )
