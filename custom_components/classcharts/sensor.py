@@ -40,7 +40,6 @@ class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
             "identifiers": {(DOMAIN, entry.entry_id)}, 
             "name": f"Class Charts ({student_label})"
         }
-        
 
     @property
     def native_value(self):
@@ -109,52 +108,35 @@ class CCLessonSensor(CoordinatorEntity, SensorEntity):
             "name": f"Class Charts ({student_label})"
         }
 
-   @property
+    @property
     def native_value(self):
-        """Calculate state outputs across all fallback modes seamlessly."""
-        from datetime import date
-        events, timeline = self.extract_events_and_timeline
-
-        # 1. PROFILE: Latest Update Date
-        if self._sensor_type == "latest_date":
-            for e in events:
-                if isinstance(e, dict) and (e.get("timestamp") or e.get("date")):
-                    try:
-                        return date.fromisoformat((e.get("timestamp") or e.get("date"))[:10])
-                    except:
-                        continue
-            for w in reversed(timeline):
-                if isinstance(w, dict) and w.get("end"):
-                    try:
-                        return date.fromisoformat(w["end"])
-                    except:
-                        continue
-            return None
-
-        # 2. PROFILE: Point Metric Logic
-        pos, neg = 0, 0
+        now = dt_util.now()
+        today_str = now.strftime("%Y-%m-%d")
+        timetable = self.coordinator.data.get("timetable", {})
+        today_lessons = timetable.get(today_str, [])
         
-        # Fallback Mode: If events history array is missing or empty, read directly from timeline
-        if not events and timeline:
-            for week in timeline:
-                if isinstance(week, dict):
-                    pos += int(week.get("positive") or week.get("score") or 0)
-                    neg += int(week.get("negative") or 0)
+        parsed = []
+        for l in today_lessons:
+            try:
+                start_naive = datetime.fromisoformat(l["start_time"])
+                end_naive = datetime.fromisoformat(l["end_time"])
+                l["dt_start"] = dt_util.as_local(start_naive)
+                l["dt_end"] = dt_util.as_local(end_naive)
+                parsed.append(l)
+            except:
+                continue
+        
+        parsed.sort(key=lambda x: x["dt_start"])
+        
+        if self._type == "current":
+            for l in parsed:
+                if l["dt_start"] <= now <= l["dt_end"]:
+                    return l["subject_name"]
         else:
-            # Standard Mode: Sum up itemized granular list entries
-            for item in events:
-                if isinstance(item, dict):
-                    score = int(item.get("score") or item.get("points") or item.get("value") or 0)
-                    if score > 0:
-                        pos += score
-                    elif score < 0:
-                        neg += abs(score)
-
-        if self._sensor_type == "balance":
-            return pos - neg
-            
-        # Returns the total positive points aggregate value for the 'breakdown' sensor type
-        return pos
+            for l in parsed:
+                if l["dt_start"] > now:
+                    return l["subject_name"]
+        return "Free"
 
 class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
     """Robust, multi-structure adapter for tracking behavior metrics."""
