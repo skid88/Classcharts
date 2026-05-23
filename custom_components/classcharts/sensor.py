@@ -28,7 +28,13 @@ class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
             return 0
         homework = self.coordinator.data.get("homework", {})
         meta = homework.get("meta", {})
-        return meta.get(self._key, 0)
+        return meta.get(self._key, 0)  
+        
+    @property
+    def extra_state_attributes(self):
+        """This provides the data for your Markdown card."""
+        hw = self.coordinator.data.get("homework", {})
+        return {"homework_list": hw.get("data", [])}    
 
 class CCLessonSensor(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
