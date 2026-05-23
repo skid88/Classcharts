@@ -9,6 +9,7 @@ PING_URL = f"{BASE_URL}/ping"
 PUPILS_URL = f"{BASE_URL}/pupils"
 TIMETABLE_URL = f"{BASE_URL}/timetable"
 HOMEWORK_URL = f"{BASE_URL}/homeworks"
+BEHAVIOUR_URL =  f"{BASE_URL}/activity"
 
 # Configuration Keys
 CONF_PUPIL_ID = "pupil_id"

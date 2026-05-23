@@ -13,7 +13,8 @@ from .const import (
     DOMAIN, 
     CONF_PUPIL_ID,
     CONF_DAYS_TO_FETCH,
-    HOMEWORK_URL
+    HOMEWORK_URL,
+    BEHAVIOUR_URL
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,7 +36,6 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
     })
     
     try:
-        
         session.headers.update({"Content-Type": "application/x-www-form-urlencoded"})
         login_payload = {
             "_method": "POST",
@@ -96,7 +96,7 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         except ValueError:
             pass
 
-        # 4.Fetch Updated V2 Timetable Data
+        # 4. Fetch Updated V2 Timetable Data
         full_schedule = {}
         for i in range(days_to_fetch):
             target_date = datetime.date.today() + datetime.timedelta(days=i)
@@ -123,9 +123,6 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         hw_from = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         hw_to = (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y-%m-%d")
         
-        # Updated V2 path mapping
-        hw_from = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-        hw_to = (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y-%m-%d")
         hw_resp = session.get(
             f"{HOMEWORK_URL}/{pupil_id}",
             params={"display_date": "due_date", "from": hw_from, "to": hw_to},
@@ -139,7 +136,6 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
                 if isinstance(hw_json, list):
                     homework_data = {"data": hw_json, "meta": {}}
                 elif isinstance(hw_json, dict):
-                    # Ensure homework payload maps smoothly out of nested data wrappers
                     if "data" in hw_json:
                         homework_data = hw_json
                     else:
@@ -149,9 +145,20 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         else:
             _LOGGER.error("V2 Homework data retrieval failed with code: %s", hw_resp.status_code)
 
+       # 6. Fetch Updated V2 Behaviour Data (Summary)
+        behaviour_resp = session.get(f"https://www.classcharts.com/apiv2parent/behaviour/{pupil_id}", timeout=10)
+        behaviour_data = behaviour_resp.json() if behaviour_resp.status_code == 200 else {}
+
+        # 7. Fetch Updated V2 Activity Data (Detailed Logs)
+        activity_resp = session.get(f"https://www.classcharts.com/apiv2parent/activity/{pupil_id}", timeout=10)
+        activity_data = activity_resp.json() if activity_resp.status_code == 200 else {}
+
+        # Return standardized dictionary for sensors
         return {
             "timetable": full_schedule,
             "homework": homework_data,
+            "behaviour_data": behaviour_data,  # This is the summary JSON
+            "activity_data": activity_data     # This is the detailed list JSON
         }
 
     except Exception as err:
@@ -168,12 +175,10 @@ class ClassChartsCoordinator(DataUpdateCoordinator):
         """Initialize the coordinator class."""
         self.entry = entry
         
-        # Read parameters out config entry storage
         self.email = entry.data["email"]
         self.password = entry.data["password"]
         self.pupil_id = entry.data[CONF_PUPIL_ID]
         
-        # Read update intervals safely with defaults
         refresh_interval = entry.options.get("refresh_interval", 24)
         self.days_to_fetch = entry.options.get(CONF_DAYS_TO_FETCH, 14)
 

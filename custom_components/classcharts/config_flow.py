@@ -109,7 +109,7 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "password": password,
             "recaptcha-token": "no-token-available"
         }
-        
+
         encoded_payload = urllib.parse.urlencode(payload)
 
         try:

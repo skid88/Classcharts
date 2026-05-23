@@ -1,6 +1,6 @@
 # 🏫 Class Charts for Home Assistant 
 
-![Version](https://img.shields.io/badge/version-1.2.6-blue.svg)
+![Version](https://img.shields.io/badge/version-1.2.7-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Home_Assistant-blue.svg)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 
@@ -9,15 +9,16 @@ A modern, UI-configurable integration that brings your **Class Charts** school t
 ---
 
 ## 🛠 Features
+- 👨‍🏫**Multi Pupil Support**:Upon setup, the integration creates separate sensors for each child.
 - 📅**Timetable Calendar**: See lessons, teachers, and room numbers.
 - 📅**Homework Calendar**: Track assignments and due dates.
+- 🎭 **Behaviour Tracking**:  Keep track of student conduct.
 - 📅 **Native Calendar Support**: Syncs your entire school timetable to the HA Calendar.
 - ⚙️ **UI Configuration**: No YAML required. Setup and adjust settings directly in the UI.
 - 📝 **Homework Tracking**: Detailed sensors for outstanding, completed, and total tasks.
 - 👨‍🏫 **Lesson Monitoring**: Know exactly what lesson is on now and what's coming up next.
 - 🔄 **Adjustable Date Range**: Sync 1 to 30 days of lessons via the "Configure" menu.
 - ⚙️ **Set Update Interval**:  Configure the data synchronization rate. 
-
 ---
 
 ## 📦 Installation
@@ -55,6 +56,7 @@ This integration supports a dynamic **Options Flow**. You can adjust how the int
 | **Days to Fetch** | `14` | How many days into the future to look for events/homework. |
 | **Show Completed Homework** | `True` | Toggle to show/hide homework assignments marked as "Completed" in Class Charts. |
 | **Show "No School** | `True` | Toggle to inject placeholder events on empty weekend days and holiday slots. |
+| **Behaviour Tracking | Keep track of student conduct |
 ---
 ## 🗓️ Calendars
 
@@ -69,8 +71,10 @@ A view of all homework assignments.
 - **Summary**: Subject and Assignment title.
 - **Description**: Full task description (HTML formatting removed for readability).
 - **Filtering**: Use the Configuration menu to hide completed tasks to keep your "To-Do" list clear.
-
 ---
+
+🎭 Behaviour Tracking
+- Keep track of student conduct, achievements, and recent awards directly in your dashboard.Behaviour Balance: A net score sensor (Positive points minus Negative points).Total Points: A cumulative sensor for all positive points earned.Recent Activity Feed: Detailed logs of recent behaviour events, including the reason, the teacher involved, and the timestamp.Top Achievements: Automatically identifies and lists the most frequent reasons for positive awards.
 
 ## 📊 Available Entities
 
