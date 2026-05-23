@@ -56,7 +56,6 @@ class CCLessonSensor(CoordinatorEntity, SensorEntity):
 
 class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
-    _attr_icon = "mdi:star-circle"
 
     def __init__(self, coordinator, entry, name, sensor_type) -> None:
         super().__init__(coordinator)
@@ -71,19 +70,41 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
         self._attr_native_unit_of_measurement = "pts"
         self._attr_state_class = "measurement"
 
+        # Dynamically set icons based on the type
+        if sensor_type == "positive":
+            self._attr_icon = "mdi:thumb-up"
+        elif sensor_type == "negative":
+            self._attr_icon = "mdi:thumb-down"
+        else:
+            self._attr_icon = "mdi:star-circle"
+
     @property
     def native_value(self):
-        """Calculates values based on the /behaviour endpoint."""
+        """Calculates values based on the /behaviour endpoint data structures."""
+        if not self.coordinator.data or not isinstance(self.coordinator.data, dict):
+            return 0
+
         data = self.coordinator.data.get("behaviour_data", {}).get("data", {})
         timeline = data.get("timeline", [])
+        
         total_pos = sum(item.get("positive", 0) for item in timeline)
         total_neg = sum(item.get("negative", 0) for item in timeline)
         
-        return (total_pos - total_neg) if self._sensor_type == "balance" else total_pos
+        if self._sensor_type == "balance":
+            return (total_pos - total_neg)
+        elif self._sensor_type == "positive":
+            return total_pos
+        elif self._sensor_type == "negative":
+            return total_neg
+        else:
+            return total_pos # fallback breakdown default
 
     @property
     def extra_state_attributes(self) -> dict:
         """Pulls detailed logs from /activity and summary reasons."""
+        if not self.coordinator.data or not isinstance(self.coordinator.data, dict):
+            return {}
+
         activity_list = self.coordinator.data.get("activity_data", {}).get("data", [])
         behaviour_data = self.coordinator.data.get("behaviour_data", {}).get("data", {})
 
@@ -103,8 +124,9 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
             "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M")
         }
 
+
 async def async_setup_entry(hass, entry, async_add_entities):
-    """Set up Class Charts sensors."""
+    """Set up Class Charts sensors cleanly using the unified CC class."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
     
     async_add_entities([
@@ -114,5 +136,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
         CCLessonSensor(coordinator, entry, "current"),
         CCLessonSensor(coordinator, entry, "next"),
         CCBehaviourSensor(coordinator, entry, "Behaviour Balance", "balance"),
-        CCBehaviourSensor(coordinator, entry, "Behaviour Points", "breakdown"),
-    ])
+        CCBehaviourSensor(coordinator, entry, "Behaviour Positive", "positive"),
+        CCBehaviourSensor(coordinator, entry, "Behaviour Negative", "negative"),
+    ], update_before_add=True)
