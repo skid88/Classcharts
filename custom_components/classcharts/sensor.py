@@ -67,22 +67,34 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
-        """Calculates points from the /behaviour timeline."""
+        """Calculates values based on the /behaviour endpoint."""
         data = self.coordinator.data.get("behaviour_data", {}).get("data", {})
         timeline = data.get("timeline", [])
         total_pos = sum(item.get("positive", 0) for item in timeline)
         total_neg = sum(item.get("negative", 0) for item in timeline)
+        
         return (total_pos - total_neg) if self._sensor_type == "balance" else total_pos
 
     @property
     def extra_state_attributes(self) -> dict:
-        """Returns log of events from /activity."""
+        """Pulls detailed logs from /activity and summary reasons."""
         activity_list = self.coordinator.data.get("activity_data", {}).get("data", [])
         behaviour_data = self.coordinator.data.get("behaviour_data", {}).get("data", {})
 
+        # Create a list of the 5 most recent events
+        recent_log = [
+            {
+                "reason": item.get("reason"),
+                "points": item.get("score"),
+                "teacher": item.get("teacher_name"),
+                "date": item.get("timestamp")
+            } for item in activity_list[:5]
+        ]
+
         return {
-            "points_history": [{"reason": item.get("reason"), "points": item.get("score")} for item in activity_list[:5]],
-            "positive_reasons": behaviour_data.get("positive_reasons", {})
+            "recent_activity": recent_log,
+            "positive_reasons": behaviour_data.get("positive_reasons", {}),
+            "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M")
         }
 
 async def async_setup_entry(hass, entry, async_add_entities):
