@@ -75,7 +75,9 @@ A view of all homework assignments.
 
 🎭 Behaviour Tracking
 - Keep track of student conduct, achievements, and recent awards directly in your dashboard.Behaviour Balance: A net score sensor (Positive points minus Negative points).Total Points: A cumulative sensor for all positive points earned.Recent Activity Feed: Detailed logs of recent behaviour events, including the reason, the teacher involved, and the timestamp.Top Achievements: Automatically identifies and lists the most frequent reasons for positive awards.
+---
 
+---
 ## 📊 Available Entities
 
 ### 🗓️ Calendars
