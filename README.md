@@ -83,21 +83,21 @@ A view of all homework assignments.
 ###  Calendars
 | Entity ID | Description |
 | :--- | :--- |
-| `calendar.class_charts_"pupils Name"_timetable` | Your daily school timetable (Lessons, Rooms, Teachers). |
-| `calendar.class_charts_"pupils Name"_homework` | Due dates for all assignments as calendar events. |
+| `calendar.class_charts_[student_name]_timetable` | Your daily school timetable (Lessons, Rooms, Teachers). |
+| `calendar.class_charts_[student_name]_homework` | Due dates for all assignments as calendar events. |
 
 ###  Homework Sensors
 | Entity ID | Description |
 | :--- | :--- |
-| `sensor.class_charts_"pupils Name"_outstanding_homework` | Count of active homework. Includes a list in attributes. |
-| `sensor.class_charts_"pupils Name"_homework_due` | Count of homework tasks due this week. |
-| `sensor.class_charts_"pupils Name"_completed_homework` | Total number of tasks marked as completed. |
+| `sensor.class_charts_[student_name]_outstanding_homework` | Count of active homework. Includes a list in attributes. |
+| `sensor.class_charts_[student_name]_homework_due` | Count of homework tasks due this week. |
+| `sensor.class_charts_[student_name]_completed_homework` | Total number of tasks marked as completed. |
 
 ###  Lesson Monitoring
 | Entity ID | Description |
 | :--- | :--- |
-| `sensor.class_charts_"pupils Name"_current_lesson` | The subject you should be in right now. |
-| `sensor.class_charts_"pupils Name"_next_lesson` | The subject coming up next. |
+| `sensor.class_charts_[student_name]_current_lesson` | The subject you should be in right now. |
+| `sensor.class_charts_[student_name]_next_lesson` | The subject coming up next. |
 
 ###  Behavior Sensors
 
@@ -121,7 +121,7 @@ Use a **Markdown Card** to display your assignments beautifully:
 
 ```jinja2
 ## 📝 Outstanding Homework
-{% set items = state_attr('sensor.class_charts_"pupils Name"_outstanding_homework', 'homework_list') %}
+{% set items = state_attr('sensor.class_charts_[student_name]_outstanding_homework', 'homework_list') %}
 {% if items %}
   {% for hw in items %}
   **{{ hw.title }}** ({{ hw.subject }})
