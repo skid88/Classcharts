@@ -1,6 +1,6 @@
 # 🏫 Class Charts for Home Assistant 
 
-![Version](https://img.shields.io/badge/version-1.2.6-blue.svg)
+![Version](https://img.shields.io/badge/version-1.2.7-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Home_Assistant-blue.svg)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 
@@ -55,6 +55,7 @@ This integration supports a dynamic **Options Flow**. You can adjust how the int
 | **Days to Fetch** | `14` | How many days into the future to look for events/homework. |
 | **Show Completed Homework** | `True` | Toggle to show/hide homework assignments marked as "Completed" in Class Charts. |
 | **Show "No School** | `True` | Toggle to inject placeholder events on empty weekend days and holiday slots. |
+| **Behaviour Tracking | Keep track of student conduct |
 ---
 ## 🗓️ Calendars
 
@@ -69,7 +70,8 @@ A view of all homework assignments.
 - **Summary**: Subject and Assignment title.
 - **Description**: Full task description (HTML formatting removed for readability).
 - **Filtering**: Use the Configuration menu to hide completed tasks to keep your "To-Do" list clear.
-
+---
+🎭 Behaviour Tracking Keep track of student conduct, achievements, and recent awards directly in your dashboard.Behaviour Balance: A net score sensor (Positive points minus Negative points).Total Points: A cumulative sensor for all positive points earned.Recent Activity Feed: Detailed logs of recent behaviour events, including the reason, the teacher involved, and the timestamp.Top Achievements: Automatically identifies and lists the most frequent reasons for positive awards.📊 Behaviour EntitiesEntity IDDescriptionsensor.class_charts_[name]_behaviour_balanceThe current net behaviour score.sensor.class_charts_[name]_behaviour_pointsTotal cumulative positive points.
 ---
 
 ## 📊 Available Entities
