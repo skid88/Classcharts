@@ -32,9 +32,20 @@ class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
         
     @property
     def extra_state_attributes(self):
-        """This provides the data for your Markdown card."""
+        """Only store outstanding homework array and cap it to prevent DB bloat."""
+        # FIX 1: Only attach the heavy data array to the Outstanding sensor entity
+        if self._key != "this_week_outstanding_count":
+            return {}
+
+        if not self.coordinator.data or not isinstance(self.coordinator.data, dict):
+            return {}
+
         hw = self.coordinator.data.get("homework", {})
-        return {"homework_list": hw.get("data", [])}    
+        raw_list = hw.get("data", [])
+
+        # FIX 2: Truncate the list to the 15 most recent/relevant tasks.
+        # This keeps the payload safely under the 16KB recorder threshold.
+        return {"homework_list": raw_list[:15]}
 
 class CCLessonSensor(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
