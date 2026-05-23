@@ -9,7 +9,7 @@ A modern, UI-configurable integration that brings your **Class Charts** school t
 ---
 
 ## 🛠 Features
-- 👨‍🏫**Multi Pupil Support**:Upon setup, the integration creates separate sensors for each child.
+- 👨‍🏫**Multi Pupil Support**: During setup the integration creates separate sensors for each child.
 - 📅**Timetable Calendar**: See lessons, teachers, and room numbers.
 - 📅**Homework Calendar**: Track assignments and due dates.
 - 🎭 **Behaviour Tracking**:  Keep track of student conduct.
