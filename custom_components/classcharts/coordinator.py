@@ -145,48 +145,20 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         else:
             _LOGGER.error("V2 Homework data retrieval failed with code: %s", hw_resp.status_code)
 
-       # 6. Fetch Updated V2 Behaviour Data (Robust Parameters)
-        behaviour_from = (datetime.date.today() - datetime.timedelta(days=365)).strftime("%Y-%m-%d")
-        behaviour_to = datetime.date.today().strftime("%Y-%m-%d")
-        
-        query_params = {
-            "from": behaviour_from,
-            "to": behaviour_to,
-            "date_from": behaviour_from,
-            "date_to": behaviour_to
-        }
-        
-        _LOGGER.debug("Requesting Class Charts activity data from %s to %s", behaviour_from, behaviour_to)
-        
-        behaviour_resp = session.get(
-            f"{BEHAVIOUR_URL}/{pupil_id}",
-            params=query_params,
-            timeout=10
-        )
-        
-        behaviour_data = {}
-        if behaviour_resp.status_code == 200:
-            try:
-                behaviour_json = behaviour_resp.json()
-                
-                _LOGGER.debug("Class Charts Behaviour Raw Type: %s", type(behaviour_json))
-                if isinstance(behaviour_json, dict):
-                    if "data" in behaviour_json:
-                        behaviour_data = behaviour_json["data"]
-                    elif "timeline" in behaviour_json:
-                        behaviour_data = behaviour_json
-                    else:
-                        behaviour_data = behaviour_json
-                else:
-                    behaviour_data = {"history": behaviour_json}
-            except Exception as parse_err:
-                _LOGGER.error("Failed parsing V2 behaviour data payload: %s", parse_err)
+       # 6. Fetch Updated V2 Behaviour Data (Summary)
+        behaviour_resp = session.get(f"https://www.classcharts.com/apiv2parent/behaviour/{pupil_id}", timeout=10)
+        behaviour_data = behaviour_resp.json() if behaviour_resp.status_code == 200 else {}
 
-        # Standardized dictionary output back to the sensor platforms
+        # 7. Fetch Updated V2 Activity Data (Detailed Logs)
+        activity_resp = session.get(f"https://www.classcharts.com/apiv2parent/activity/{pupil_id}", timeout=10)
+        activity_data = activity_resp.json() if activity_resp.status_code == 200 else {}
+
+        # Return standardized dictionary for sensors
         return {
             "timetable": full_schedule,
             "homework": homework_data,
-            "behaviour": behaviour_data,
+            "behaviour_data": behaviour_data,  # This is the summary JSON
+            "activity_data": activity_data     # This is the detailed list JSON
         }
 
     except Exception as err:
