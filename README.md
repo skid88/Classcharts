@@ -99,7 +99,7 @@ A view of all homework assignments.
 
 ---
 
-![Screenshot](https://github.com/skid88/Classcharts/blob/3baa708d7aac640ea3f410ff3c10da3c0dcb70d3/timetable.png)
+![Screenshot](https://github.com/skid88/Classcharts/blob/bc432526bc83bd0f049296d1b53e79a021403b4a/Timetable.png)
 ![Screenshot](https://github.com/skid88/Classcharts/blob/3baa708d7aac640ea3f410ff3c10da3c0dcb70d3/homework.png)
 ---
 ## 🎨 Dashboard: Homework List
