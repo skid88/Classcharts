@@ -99,8 +99,8 @@ A view of all homework assignments.
 
 ---
 
- ![Screenshot](https://github.com/skid88/Classcharts/blob/main/Timetable.png)
- ![Screenshot](https://github.com/skid88/Classcharts/blob/main/homework.png)
+![Screenshot](https://github.com/skid88/Classcharts/blob/3baa708d7aac640ea3f410ff3c10da3c0dcb70d3/timetable.png)
+![Screenshot](https://github.com/skid88/Classcharts/blob/3baa708d7aac640ea3f410ff3c10da3c0dcb70d3/homework.png)
 ---
 ## 🎨 Dashboard: Homework List
 Use a **Markdown Card** to display your assignments beautifully:
@@ -121,8 +121,6 @@ Use a **Markdown Card** to display your assignments beautifully:
 <p style="text-align: center; color: #555; font-size: 0.8em;">
   Last checked: {{ now().strftime('%H:%M') }}
 </p>
-```
-![Screenshot](https://github.com/skid88/Classcharts/blob/3baa708d7aac640ea3f410ff3c10da3c0dcb70d3/homework.png)
 ---
 ## ⚖️ Disclaimer
 
