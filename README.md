@@ -9,7 +9,7 @@ A modern, UI-configurable integration that brings your **Class Charts** school t
 ---
 
 ## 🛠 Features
-- 👨‍🏫**Multi Pupil Support**:Upon setup, the integration creates separate sensors for each child.
+- 👨‍🏫**Multi Pupil Support**: During setup the integration creates separate sensors for each child.
 - 📅**Timetable Calendar**: See lessons, teachers, and room numbers.
 - 📅**Homework Calendar**: Track assignments and due dates.
 - 🎭 **Behaviour Tracking**:  Keep track of student conduct.
@@ -56,9 +56,8 @@ This integration supports a dynamic **Options Flow**. You can adjust how the int
 | **Days to Fetch** | `14` | How many days into the future to look for events/homework. |
 | **Show Completed Homework** | `True` | Toggle to show/hide homework assignments marked as "Completed" in Class Charts. |
 | **Show "No School** | `True` | Toggle to inject placeholder events on empty weekend days and holiday slots. |
-| **Behaviour Tracking | Keep track of student conduct |
----
-## 🗓️ Calendars
+
+##  Calendars
 
 ### Class Charts Timetable
 A daily view of school lessons. 
@@ -73,69 +72,70 @@ A view of all homework assignments.
 - **Filtering**: Use the Configuration menu to hide completed tasks to keep your "To-Do" list clear.
 ---
 
-🎭 Behaviour Tracking
+ Behaviour Tracking
 - Keep track of student conduct, achievements, and recent awards directly in your dashboard.Behaviour Balance: A net score sensor (Positive points minus Negative points).Total Points: A cumulative sensor for all positive points earned.Recent Activity Feed: Detailed logs of recent behaviour events, including the reason, the teacher involved, and the timestamp.Top Achievements: Automatically identifies and lists the most frequent reasons for positive awards.
+---
+![Screenshot](https://github.com/skid88/Classcharts/blob/ff572d17006ae9e132a95bf630997f08b31e7e8f/overview.png)
+![Screenshot](https://github.com/skid88/Classcharts/blob/e419a83b6e2f13cccad8074cd0c8273dc1044dc0/behavior%20feed1.png)
+---
+##  Available Entities
 
-## 📊 Available Entities
-
-### 🗓️ Calendars
+###  Calendars
 | Entity ID | Description |
 | :--- | :--- |
-| `calendar.class_charts_"pupils Name"_timetable` | Your daily school timetable (Lessons, Rooms, Teachers). |
-| `calendar.class_charts_"pupils Name"_homework` | Due dates for all assignments as calendar events. |
+| `calendar.class_charts_[student_name]_timetable` | Your daily school timetable (Lessons, Rooms, Teachers). |
+| `calendar.class_charts_[student_name]_homework` | Due dates for all assignments as calendar events. |
 
-### 📝 Homework Sensors
+###  Homework Sensors
 | Entity ID | Description |
 | :--- | :--- |
-| `sensor.class_charts_"pupils Name"_outstanding_homework` | Count of active homework. Includes a list in attributes. |
-| `sensor.class_charts_"pupils Name"_homework_due` | Count of homework tasks due this week. |
-| `sensor.class_charts_"pupils Name"_completed_homework` | Total number of tasks marked as completed. |
+| `sensor.class_charts_[student_name]_outstanding_homework` | Count of active homework. Includes a list in attributes. |
+| `sensor.class_charts_[student_name]_homework_due` | Count of homework tasks due this week. |
+| `sensor.class_charts_[student_name]_completed_homework` | Total number of tasks marked as completed. |
 
-### 👨‍🏫 Lesson Monitoring
+###  Lesson Monitoring
 | Entity ID | Description |
 | :--- | :--- |
-| `sensor.class_charts_"pupils Name"_current_lesson` | The subject you should be in right now. |
-| `sensor.class_charts_"pupils Name"_next_lesson` | The subject coming up next. |
+| `sensor.class_charts_[student_name]_current_lesson` | The subject you should be in right now. |
+| `sensor.class_charts_[student_name]_next_lesson` | The subject coming up next. |
 
+###  Behavior Sensors
+
+| Entity ID | Friendly Name | Native State | Description |
+| :--- | :--- | :--- | :--- |
+| `sensor.class_charts_[student_name]_behaviour_balance` | Behavior Balance | `int` | Net total score (Positive points minus Negative incidents). |
+| `sensor.class_charts_[student_name]_behaviour_positive` | Behavior Positive | `int` | Running total of all positive praise points earned. |
+| `sensor.class_charts_[student_name]_behaviour_negative` | Behavior Negative | `int` | Running total of all negative discipline/incident points. |
+
+#### State Attributes
+All behavior sensors expose the following diagnostic and historical data in their state attributes:
+
+* **`recent_activity`** *(list)*: A collection of the 5 most recent behavior incidents or praise logs.
 ---
 
- ![Screenshot](https://github.com/skid88/Classcharts/blob/main/Timetable.png)
- ![Screenshot](https://github.com/skid88/Classcharts/blob/main/homework.png)
+![Screenshot](https://github.com/skid88/Classcharts/blob/bc432526bc83bd0f049296d1b53e79a021403b4a/Timetable.png)
+![Screenshot](https://github.com/skid88/Classcharts/blob/3baa708d7aac640ea3f410ff3c10da3c0dcb70d3/homework.png)
 ---
 ## 🎨 Dashboard: Homework List
 Use a **Markdown Card** to display your assignments beautifully:
 
 ```jinja2
-{% set items = state_attr('sensor.class_charts_"pupils name"_outstanding_homework', 'homework_list') or [] %}
-{% set today = today_at("00:00").replace(tzinfo=None) %}
-{% set next_week = today + timedelta(days=14) %}
-{% set active_homework = namespace(count=0) %}
-
-###  Homework Due This Week
-
-{% if items | length == 0 %}
-✅ No homework found!
-{% else %}
-  {% for item in items %}
-    {# Convert due_date and strip any auto-assigned timezone info #}
-    {% set due_date = as_datetime(item.due_date).replace(tzinfo=None) %}
-    
-    {# Now they are both timezone-naive, the comparison works perfectly #}
-    {% if due_date >= today and due_date <= next_week %}
-      {% set active_homework.count = active_homework.count + 1 %}
-**{{ item.subject }}**
-{{ item.title }}
-Due: {{ item.due_date }}
-***
-    {% endif %}
+## 📝 Outstanding Homework
+{% set items = state_attr('sensor.class_charts_[student_name]_outstanding_homework', 'homework_list') %}
+{% if items %}
+  {% for hw in items %}
+  **{{ hw.title }}** ({{ hw.subject }})
+  *Due: {{ hw.due_date }}*
+  ***
   {% endfor %}
-
-  {% if active_homework.count == 0 %}
-✅ All caught up for the next 7 days!
-  {% endif %}
+{% else %}
+  All caught up! 🎉
 {% endif %}
+
+<p style="text-align: center; color: #555; font-size: 0.8em;">
+  Last checked: {{ now().strftime('%H:%M') }}
+</p>
 ```
-![Screenshot](https://github.com/skid88/Classcharts/blob/main/homework2.png)
 ---
 ## ⚖️ Disclaimer
 
@@ -152,4 +152,3 @@ If you encounter any issues or have feature requests, please open an [Issue](htt
 
 ## 📝 License
 This project is for personal use and is not an official Class Charts product.
-
