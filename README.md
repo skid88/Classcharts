@@ -57,7 +57,7 @@ This integration supports a dynamic **Options Flow**. You can adjust how the int
 | **Show Completed Homework** | `True` | Toggle to show/hide homework assignments marked as "Completed" in Class Charts. |
 | **Show "No School** | `True` | Toggle to inject placeholder events on empty weekend days and holiday slots. |
 
-## 🗓️ Calendars
+##  Calendars
 
 ### Class Charts Timetable
 A daily view of school lessons. 
@@ -72,33 +72,45 @@ A view of all homework assignments.
 - **Filtering**: Use the Configuration menu to hide completed tasks to keep your "To-Do" list clear.
 ---
 
-🎭 Behaviour Tracking
+ Behaviour Tracking
 - Keep track of student conduct, achievements, and recent awards directly in your dashboard.Behaviour Balance: A net score sensor (Positive points minus Negative points).Total Points: A cumulative sensor for all positive points earned.Recent Activity Feed: Detailed logs of recent behaviour events, including the reason, the teacher involved, and the timestamp.Top Achievements: Automatically identifies and lists the most frequent reasons for positive awards.
 ---
 ![Screenshot](https://github.com/skid88/Classcharts/blob/ff572d17006ae9e132a95bf630997f08b31e7e8f/overview.png)
 ![Screenshot](https://github.com/skid88/Classcharts/blob/e419a83b6e2f13cccad8074cd0c8273dc1044dc0/behavior%20feed1.png)
 ---
-## 📊 Available Entities
+##  Available Entities
 
-### 🗓️ Calendars
+###  Calendars
 | Entity ID | Description |
 | :--- | :--- |
 | `calendar.class_charts_"pupils Name"_timetable` | Your daily school timetable (Lessons, Rooms, Teachers). |
 | `calendar.class_charts_"pupils Name"_homework` | Due dates for all assignments as calendar events. |
 
-### 📝 Homework Sensors
+###  Homework Sensors
 | Entity ID | Description |
 | :--- | :--- |
 | `sensor.class_charts_"pupils Name"_outstanding_homework` | Count of active homework. Includes a list in attributes. |
 | `sensor.class_charts_"pupils Name"_homework_due` | Count of homework tasks due this week. |
 | `sensor.class_charts_"pupils Name"_completed_homework` | Total number of tasks marked as completed. |
 
-### 👨‍🏫 Lesson Monitoring
+###  Lesson Monitoring
 | Entity ID | Description |
 | :--- | :--- |
 | `sensor.class_charts_"pupils Name"_current_lesson` | The subject you should be in right now. |
 | `sensor.class_charts_"pupils Name"_next_lesson` | The subject coming up next. |
 
+###  Behavior Sensors
+
+| Entity ID | Friendly Name | Native State | Description |
+| :--- | :--- | :--- | :--- |
+| `sensor.class_charts_[student_name]_behaviour_balance` | Behavior Balance | `int` | Net total score (Positive points minus Negative incidents). |
+| `sensor.class_charts_[student_name]_behaviour_positive` | Behavior Positive | `int` | Running total of all positive praise points earned. |
+| `sensor.class_charts_[student_name]_behaviour_negative` | Behavior Negative | `int` | Running total of all negative discipline/incident points. |
+
+#### State Attributes
+All behavior sensors expose the following diagnostic and historical data in their state attributes:
+
+* **`recent_activity`** *(list)*: A collection of the 5 most recent behavior incidents or praise logs.
 ---
 
 ![Screenshot](https://github.com/skid88/Classcharts/blob/bc432526bc83bd0f049296d1b53e79a021403b4a/Timetable.png)
@@ -123,6 +135,7 @@ Use a **Markdown Card** to display your assignments beautifully:
 <p style="text-align: center; color: #555; font-size: 0.8em;">
   Last checked: {{ now().strftime('%H:%M') }}
 </p>
+```
 ---
 ## ⚖️ Disclaimer
 
