@@ -122,7 +122,7 @@ Use a **Markdown Card** to display your assignments beautifully:
   Last checked: {{ now().strftime('%H:%M') }}
 </p>
 ```
-![Screenshot](https://github.com/skid88/Classcharts/blob/main/homework2.png)
+![Screenshot](https://github.com/skid88/Classcharts/blob/3baa708d7aac640ea3f410ff3c10da3c0dcb70d3/homework.png)
 ---
 ## ⚖️ Disclaimer
 
