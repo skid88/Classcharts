@@ -9,9 +9,9 @@ A modern, UI-configurable integration that brings your **Class Charts** school t
 ---
 
 ## 🛠 Features
-- 👨‍🏫**Multi Pupil Support**: During setup the integration creates separate sensors for each child.
-- 📅**Timetable Calendar**: See lessons, teachers, and room numbers.
-- 📅**Homework Calendar**: Track assignments and due dates.
+- 👨‍🏫 **Multi Pupil Support**: During setup the integration creates separate sensors for each child.
+- 📅 **Timetable Calendar**: See lessons, teachers, and room numbers.
+- 📅 **Homework Calendar**: Track assignments and due dates.
 - 🎭 **Behaviour Tracking**:  Keep track of student conduct.
 - 📅 **Native Calendar Support**: Syncs your entire school timetable to the HA Calendar.
 - ⚙️ **UI Configuration**: No YAML required. Setup and adjust settings directly in the UI.
