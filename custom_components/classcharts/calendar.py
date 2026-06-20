@@ -108,31 +108,27 @@ class ClassChartsTimetableCalendar(CoordinatorEntity, CalendarEntity):
                 # 1. Stay within the bounds of your active data window and avoid past days
                 if today <= current_day <= max_data_date:
                     
-                    # 2. Check if this is a weekday, OR if you want to include weekends too.
-                    # (If you only want weekends excluded when a toggle is off, you can adapt this)
-                    is_weekday = current_day.weekday() < 5
+                    # 2. Check if this specific day has any real lessons (weekdays or weekends)
+                    day_has_lesson = any(e.start.date() == current_day for e in filtered_events)
                     
-                    # If it's a weekday, OR if your option allows weekends/holidays, process it:
-                    if is_weekday: 
-                        day_has_lesson = any(e.start.date() == current_day for e in filtered_events)
+                    # 3. If there are no lessons (which will always be true for weekends), add "No School"
+                    if not day_has_lesson:
+                        day_start = dt_util.as_local(
+                            datetime.combine(current_day, datetime.strptime("08:30", "%H:%M").time())
+                        )
+                        day_end = dt_util.as_local(
+                            datetime.combine(current_day, datetime.strptime("15:30", "%H:%M").time())
+                        )
                         
-                        if not day_has_lesson:
-                            day_start = dt_util.as_local(
-                                datetime.combine(current_day, datetime.strptime("08:30", "%H:%M").time())
+                        filtered_events.append(
+                            CalendarEvent(
+                                summary="No School",
+                                start=day_start,
+                                end=day_end,
+                                description="No lessons scheduled for this day.",
+                                location="Home",
                             )
-                            day_end = dt_util.as_local(
-                                datetime.combine(current_day, datetime.strptime("15:30", "%H:%M").time())
-                            )
-                            
-                            filtered_events.append(
-                                CalendarEvent(
-                                    summary="No School",
-                                    start=day_start,
-                                    end=day_end,
-                                    description="No lessons scheduled for this school day.",
-                                    location="Home",
-                                )
-                            )
+                        )
                 current_day += timedelta(days=1)
         return sorted(filtered_events, key=lambda x: x.start)
         
