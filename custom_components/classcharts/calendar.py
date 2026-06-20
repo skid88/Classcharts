@@ -100,7 +100,7 @@ class ClassChartsTimetableCalendar(CoordinatorEntity, CalendarEntity):
             finish_day = end_date.date()
             
             while current_day <= finish_day:
-                # Keeps your preference: Only weekdays, skipping the past, stretching indefinitely into the future UI window
+                # Keeps preference: Only weekdays, skipping the past, stretching indefinitely into the future UI window
                 if current_day.weekday() < 5 and current_day >= today:
                     day_has_lesson = any(e.start.date() == current_day for e in filtered_events)
                     
