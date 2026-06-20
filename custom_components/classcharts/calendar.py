@@ -95,17 +95,13 @@ class ClassChartsTimetableCalendar(CoordinatorEntity, CalendarEntity):
         show_no_school = self.coordinator.config_entry.options.get(CONF_SHOW_NO_SCHOOL, True)
 
         if show_no_school:
-            from .const import CONF_DAYS_TO_FETCH
-            days_to_fetch = self.coordinator.config_entry.options.get(CONF_DAYS_TO_FETCH, 7)
-            
             today = dt_util.now().date()
-            max_data_date = today + timedelta(days=days_to_fetch)
-            
             current_day = start_date.date()
             finish_day = end_date.date()
             
             while current_day <= finish_day:
-                if current_day.weekday() < 5 and today <= current_day <= max_data_date:
+                # Keeps your preference: Only weekdays, skipping the past, stretching indefinitely into the future UI window
+                if current_day.weekday() < 5 and current_day >= today:
                     day_has_lesson = any(e.start.date() == current_day for e in filtered_events)
                     
                     if not day_has_lesson:
@@ -121,7 +117,7 @@ class ClassChartsTimetableCalendar(CoordinatorEntity, CalendarEntity):
                                 summary="No School",
                                 start=day_start,
                                 end=day_end,
-                                description="No lessons scheduled for this school day within the fetched range.",
+                                description="No lessons scheduled for this school day.",
                                 location="Home",
                             )
                         )
