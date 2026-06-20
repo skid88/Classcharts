@@ -99,37 +99,41 @@ class ClassChartsTimetableCalendar(CoordinatorEntity, CalendarEntity):
             days_to_fetch = self.coordinator.config_entry.options.get(CONF_DAYS_TO_FETCH, 7)
             
             today = dt_util.now().date()
-            # This is your true data horizon—nothing beyond this point has been fetched!
             max_data_date = today + timedelta(days=days_to_fetch)
             
             current_day = start_date.date()
             finish_day = end_date.date()
             
             while current_day <= finish_day:
-                # 1. Skip past days (current_day >= today)
-                # 2. Skip weekdays out beyond your actual fetched data window (current_day <= max_data_date)
-                if current_day.weekday() < 5 and today <= current_day <= max_data_date:
-                    day_has_lesson = any(e.start.date() == current_day for e in filtered_events)
+                # 1. Stay within the bounds of your active data window and avoid past days
+                if today <= current_day <= max_data_date:
                     
-                    if not day_has_lesson:
-                        day_start = dt_util.as_local(
-                            datetime.combine(current_day, datetime.strptime("08:30", "%H:%M").time())
-                        )
-                        day_end = dt_util.as_local(
-                            datetime.combine(current_day, datetime.strptime("15:30", "%H:%M").time())
-                        )
+                    # 2. Check if this is a weekday, OR if you want to include weekends too.
+                    # (If you only want weekends excluded when a toggle is off, you can adapt this)
+                    is_weekday = current_day.weekday() < 5
+                    
+                    # If it's a weekday, OR if your option allows weekends/holidays, process it:
+                    if is_weekday: 
+                        day_has_lesson = any(e.start.date() == current_day for e in filtered_events)
                         
-                        filtered_events.append(
-                            CalendarEvent(
-                                summary="No School",
-                                start=day_start,
-                                end=day_end,
-                                description="No lessons scheduled for this school day within the fetched range.",
-                                location="Home",
+                        if not day_has_lesson:
+                            day_start = dt_util.as_local(
+                                datetime.combine(current_day, datetime.strptime("08:30", "%H:%M").time())
                             )
-                        )
+                            day_end = dt_util.as_local(
+                                datetime.combine(current_day, datetime.strptime("15:30", "%H:%M").time())
+                            )
+                            
+                            filtered_events.append(
+                                CalendarEvent(
+                                    summary="No School",
+                                    start=day_start,
+                                    end=day_end,
+                                    description="No lessons scheduled for this school day.",
+                                    location="Home",
+                                )
+                            )
                 current_day += timedelta(days=1)
-
         return sorted(filtered_events, key=lambda x: x.start)
         
 class ClassChartsHomeworkCalendar(CoordinatorEntity, CalendarEntity):
