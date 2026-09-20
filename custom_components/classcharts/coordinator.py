@@ -102,7 +102,6 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
             target_date = datetime.date.today() + datetime.timedelta(days=i)
             date_str = target_date.strftime("%Y-%m-%d")
 
-            # Updated V2 path mapping
             resp = session.get(
                 f"{V2_BASE_URL}/timetable/{pupil_id}",
                 params={"date": date_str},
@@ -145,12 +144,26 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         else:
             _LOGGER.error("V2 Homework data retrieval failed with code: %s", hw_resp.status_code)
 
-       # 6. Fetch Updated V2 Behaviour Data (Summary)
-        behaviour_resp = session.get(f"https://www.classcharts.com/apiv2parent/behaviour/{pupil_id}", timeout=10)
+        # Calculate Academic Year Date Boundaries (UK: Sept 1st start)
+        now = datetime.date.today()
+        acad_start_year = now.year if now.month >= 9 else now.year - 1
+        acad_start_date = datetime.date(acad_start_year, 9, 1).strftime("%Y-%m-%d")
+        acad_end_date = now.strftime("%Y-%m-%d")
+
+        # 6. Fetch Updated V2 Behaviour Data scoped to the Academic Year
+        behaviour_resp = session.get(
+            f"https://www.classcharts.com/apiv2parent/behaviour/{pupil_id}",
+            params={"from": acad_start_date, "to": acad_end_date},
+            timeout=10
+        )
         behaviour_data = behaviour_resp.json() if behaviour_resp.status_code == 200 else {}
 
-        # 7. Fetch Updated V2 Activity Data (Detailed Logs)
-        activity_resp = session.get(f"https://www.classcharts.com/apiv2parent/activity/{pupil_id}", timeout=10)
+        # 7. Fetch Updated V2 Activity Data (Detailed Logs) scoped to Academic Year as well
+        activity_resp = session.get(
+            f"https://www.classcharts.com/apiv2parent/activity/{pupil_id}",
+            params={"from": acad_start_date, "to": acad_end_date},
+            timeout=10
+        )
         activity_data = activity_resp.json() if activity_resp.status_code == 200 else {}
 
         # Return standardized dictionary for sensors
