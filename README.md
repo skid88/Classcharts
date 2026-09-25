@@ -18,7 +18,7 @@ A modern, UI-configurable integration that brings your **Class Charts** school t
 - 📝 **Homework Tracking**: Detailed sensors for outstanding, completed, and total tasks.
 - 👨‍🏫 **Lesson Monitoring**: Know exactly what lesson is on now and what's coming up next.
 - 🔄 **Adjustable Date Range**: Sync 1 to 30 days of lessons via the "Configure" menu.
-- ⚙️ **Set Update Interval**:  Configure the data synchronization rate. 
+- ⚙️ **Set Update Interval**:  Configure the data synchronization rate.
 ---
 
 ## 📦 Installation
