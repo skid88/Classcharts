@@ -1,6 +1,6 @@
 # 🏫 Class Charts for Home Assistant 
 
-![Version](https://img.shields.io/badge/version-1.2.8-blue.svg)
+![Version](https://img.shields.io/badge/version-1.2.9.1-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Home_Assistant-blue.svg)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 
@@ -18,7 +18,7 @@ A modern, UI-configurable integration that brings your **Class Charts** school t
 - 📝 **Homework Tracking**: Detailed sensors for outstanding, completed, and total tasks.
 - 👨‍🏫 **Lesson Monitoring**: Know exactly what lesson is on now and what's coming up next.
 - 🔄 **Adjustable Date Range**: Sync 1 to 30 days of lessons via the "Configure" menu.
-- ⚙️ **Set Update Interval**:  Configure the data synchronization rate. 
+- ⚙️ **Set Update Interval**:  Configure the data synchronization rate.
 ---
 
 ## 📦 Installation
@@ -52,7 +52,7 @@ This integration supports a dynamic **Options Flow**. You can adjust how the int
 
 | Option | Default | Description |
 | :--- | :--- | :--- |
-| **Refresh Interval** | `24` | How often (in hours) the integration updates data from Class Charts. |
+| **Refresh Interval** | `24` | How often (in minutes) the integration updates data from Class Charts. |
 | **Days to Fetch** | `14` | How many days into the future to look for events/homework. |
 | **Show Completed Homework** | `True` | Toggle to show/hide homework assignments marked as "Completed" in Class Charts. |
 | **Show "No School** | `True` | Toggle to inject placeholder events on empty weekend days and holiday slots. |
@@ -121,20 +121,32 @@ Use a **Markdown Card** to display your assignments beautifully:
 
 ```jinja2
 ## 📝 Outstanding Homework
-{% set items = state_attr('sensor.class_charts_[student_name]_outstanding_homework', 'homework_list') %}
-{% if items %}
-  {% for hw in items %}
-  **{{ hw.title }}** ({{ hw.subject }})
-  *Due: {{ hw.due_date }}*
-  ***
-  {% endfor %}
-{% else %}
-  All caught up! 🎉
-{% endif %}
+{% set items = state_attr('sensor.class_charts_alice_browne_outstanding_homework', 'homework_list') or [] %}
+{% set today = today_at("00:00").replace(tzinfo=None) %}
+{% set next_week = today + timedelta(days=14) %}
+{% set active_homework = namespace(count=0) %}
 
-<p style="text-align: center; color: #555; font-size: 0.8em;">
-  Last checked: {{ now().strftime('%H:%M') }}
-</p>
+### Homework Due This Week
+
+{% if items | length == 0 %}
+✅ No homework found!
+{% else %}
+  {% for item in items %}
+    {# Use the clean YYYY-MM-DD key for python math #}
+    {% set due_date = as_datetime(item.due_date).replace(tzinfo=None) %}
+    
+    {% if due_date >= today and due_date <= next_week %}
+      {% set active_homework.count = active_homework.count + 1 %}
+**{{ item.subject }}** -  {{ item.title }}
+Due: {{ item.due_date_formatted }}
+
+    {% endif %}
+  {% endfor %}
+
+  {% if active_homework.count == 0 %}
+✅ All caught up for the next 7 days!
+  {% endif %}
+{% endif %}
 ```
 ---
 ## ⚖️ Disclaimer

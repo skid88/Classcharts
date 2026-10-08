@@ -241,7 +241,7 @@ class ClassChartsOptionsFlowHandler(config_entries.OptionsFlow):
             data_schema=vol.Schema({
                 vol.Optional(
                     CONF_REFRESH_INTERVAL,
-                    default=options.get(CONF_REFRESH_INTERVAL, 24),
+                    default=options.get(CONF_REFRESH_INTERVAL, 60), # Default to 60 minutes
                 ): int,
                 vol.Optional(
                     CONF_DAYS_TO_FETCH,

@@ -30,7 +30,7 @@
         "description": "Adjust how much data you want to retrieve and how often.",
         "data": {
           "days_to_fetch": "Days to Fetch (1-30)",
-          "refresh_interval": "Update Frequency (Hours)",
+          "refresh_interval": "Update Frequency (Minutes)",
           "show_completed_homework": "Display completed homework on calendar",
           "show_no_school": "Display 'No School' holidays & weekends"
         }

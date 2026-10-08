@@ -52,11 +52,18 @@ class ClassChartsTimetableCalendar(CoordinatorEntity, CalendarEntity):
 
     @property
     def event(self) -> CalendarEvent | None:
-        """Return the next upcoming lesson."""
+        """Return the next upcoming lesson for today."""
         events = self._get_events()
         now = dt_util.now()
-        upcoming = [e for e in events if e.end > now]
-        return upcoming[0] if upcoming else None
+        today = now.date()
+        
+        # Only look at lessons scheduled for today that haven't finished yet
+        upcoming_today = [
+            e for e in events 
+            if e.start.date() == today and e.end > now
+        ]
+        
+        return upcoming_today[0] if upcoming_today else None
 
     def _get_events(self) -> list[CalendarEvent]:
         """Convert coordinator data to CalendarEvents."""
@@ -99,19 +106,20 @@ class ClassChartsTimetableCalendar(CoordinatorEntity, CalendarEntity):
             days_to_fetch = self.coordinator.config_entry.options.get(CONF_DAYS_TO_FETCH, 7)
             
             today = dt_util.now().date()
-            max_data_date = today + timedelta(days=days_to_fetch)
+            # Stop right before the absolute boundary limit to avoid the trailing extra day
+            max_data_date = today + timedelta(days=days_to_fetch - 1)
             
             current_day = start_date.date()
-            finish_day = end_date.date()
+            finish_day = min(end_date.date(), max_data_date)
             
             while current_day <= finish_day:
-                # 1. Stay within the bounds of your active data window and avoid past days
+                # 1. Stay within active data window and avoid past days
                 if today <= current_day <= max_data_date:
                     
-                    # 2. Check if this specific day has any real lessons (weekdays or weekends)
+                    # 2. Check if this specific day has any real lessons
                     day_has_lesson = any(e.start.date() == current_day for e in filtered_events)
                     
-                    # 3. If there are no lessons (which will always be true for weekends), add "No School"
+                    # 3. If there are no lessons, add "No School"
                     if not day_has_lesson:
                         day_start = dt_util.as_local(
                             datetime.combine(current_day, datetime.strptime("08:30", "%H:%M").time())
