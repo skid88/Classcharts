@@ -29,13 +29,24 @@ class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
         if not self.coordinator.data or not isinstance(self.coordinator.data, dict):
             return 0
         homework = self.coordinator.data.get("homework", {})
+        
+        # Calculate total unticked items dynamically across the expanded list
+        if self._key == "total_outstanding_count":
+            raw_list = homework.get("data", [])
+            count = 0
+            for item in raw_list[:40]:
+                status_obj = item.get("status") or {}
+                if status_obj.get("ticked", "no") != "yes":
+                    count += 1
+            return count
+
         meta = homework.get("meta", {})
         return meta.get(self._key, 0)    
         
     @property
     def extra_state_attributes(self):
         """Clean and trim homework list attributes with a short text snippet."""
-        if self._key != "this_week_outstanding_count":
+        if self._key not in ("this_week_outstanding_count", "total_outstanding_count"):
             return {}
 
         if not self.coordinator.data or not isinstance(self.coordinator.data, dict):
@@ -129,9 +140,8 @@ class CCLessonSensor(CoordinatorEntity, SensorEntity):
                     return datetime.fromisoformat(val_str).time()
                 except ValueError:
                     pass
-                  
+                    
             try:
-                
                 if " " in val_str:
                     val_str = val_str.split(" ")[-1]
                 return datetime.strptime(val_str[:5], "%H:%M").time()
@@ -281,6 +291,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     
     async_add_entities([
         CCHomeworkSensor(coordinator, entry, "Outstanding Homework", "this_week_outstanding_count"),
+        CCHomeworkSensor(coordinator, entry, "Total Outstanding Homework", "total_outstanding_count"),
         CCHomeworkSensor(coordinator, entry, "Homework Due", "this_week_due_count"),
         CCHomeworkSensor(coordinator, entry, "Completed Homework", "this_week_completed_count"),
         CCLessonSensor(coordinator, entry, "current"),
