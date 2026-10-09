@@ -154,18 +154,22 @@ Due: {{ item.due_date_formatted }}
 ## 🎨 Custom Markdown Card (Listing All Unticked Tasks)
 Because the integration now maps granular ticked and completed fields and extends the list size, you can build a comprehensive markdown card to list upcoming homework:
 ```jinja2
-## 📚 Outstanding Homework
-{% set hw_list = state_attr('sensor.class_charts_alice_browne_outstanding_homework', 'homework_list') or [] %}
-{% set outstanding = hw_list | selectattr('ticked', 'eq', 'no') | list %}
+## 📚 Total Outstanding Homework
+{% set hw_list = state_attr('sensor.class_charts_alice_browne_outstanding_homework', 'homework_list') or [] -%}
+{% set outstanding = hw_list | selectattr('ticked', 'eq', 'no') | list -%}
 
-{% if outstanding | count > 0 %}
-  {% for item in outstanding %}
-    - **{{ item.subject if item.subject else 'General' }}**: {{ item.title }} 
-      _(Due: {{ item.due_date_formatted }})_
-  {% endfor %}
-{% else %}
-  🎉 All homework is completed!
+{% if outstanding | count > 0 -%}
+{% for item in outstanding -%}
+{% set subject_name = item.subject if item and item.subject and item.subject != 'None' else 'General' -%}
+- **{{ subject_name }}**: {{ item.title }}  
+  _(Due: {{ item.due_date_formatted }})_
+{% if not loop.last %}
+---
 {% endif %}
+{%- endfor %}
+{% else -%}
+🎉 All homework is completed!
+{%- endif %}
 ```
 ---
 ## ⚖️ Disclaimer
