@@ -29,13 +29,24 @@ class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
         if not self.coordinator.data or not isinstance(self.coordinator.data, dict):
             return 0
         homework = self.coordinator.data.get("homework", {})
+        
+        # Calculate total unticked items dynamically across the expanded list
+        if self._key == "total_outstanding_count":
+            raw_list = homework.get("data", [])
+            count = 0
+            for item in raw_list[:40]:
+                status_obj = item.get("status") or {}
+                if status_obj.get("ticked", "no") != "yes":
+                    count += 1
+            return count
+
         meta = homework.get("meta", {})
         return meta.get(self._key, 0)    
         
     @property
     def extra_state_attributes(self):
         """Clean and trim homework list attributes with a short text snippet."""
-        if self._key != "this_week_outstanding_count":
+        if self._key not in ("this_week_outstanding_count", "total_outstanding_count"):
             return {}
 
         if not self.coordinator.data or not isinstance(self.coordinator.data, dict):
@@ -45,7 +56,7 @@ class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
         raw_list = hw.get("data", [])
 
         cleaned_list = []
-        for item in raw_list[:15]:
+        for item in raw_list[:40]:
             raw_desc = item.get("description", "") or ""
             clean_text = re.sub('<[^<]+?>', '', raw_desc)
             clean_text = unescape(clean_text).strip()
@@ -70,6 +81,9 @@ class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
             due_iso, due_disp = format_date(raw_due)
             issue_iso, issue_disp = format_date(raw_issue)
 
+            status_obj = item.get("status") or {}
+            ticked_val = status_obj.get("ticked", "no")
+
             cleaned_list.append({
                 "id": item.get("id"),
                 "subject": item.get("subject"),
@@ -78,13 +92,14 @@ class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
                 "homework_type": item.get("homework_type"),
                 "issue_date": issue_iso,
                 "issue_date_formatted": issue_disp,
-                "due_date": due_iso,           # YYYY-MM-DD for your Jinja math
-                "due_date_formatted": due_disp,     # DD/MM/YYYY for display
+                "due_date": due_iso,           
+                "due_date_formatted": due_disp,     
                 "description_snippet": description_snippet,
+                "ticked": ticked_val,
+                "completed": ticked_val == "yes",
             })
 
         return {"homework_list": cleaned_list}
-
 
 class CCLessonSensor(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
@@ -120,23 +135,19 @@ class CCLessonSensor(CoordinatorEntity, SensorEntity):
                 return None
             val_str = str(time_val)
             
-            # If it's an ISO timestamp containing 'T' (e.g. 2026-09-21T09:00:00)
             if "T" in val_str:
                 try:
                     return datetime.fromisoformat(val_str).time()
                 except ValueError:
                     pass
-            
-            # If it's just a time string, clean it up and grab HH:MM
+                    
             try:
-                # Remove any leading date if it's glued with a space
                 if " " in val_str:
                     val_str = val_str.split(" ")[-1]
                 return datetime.strptime(val_str[:5], "%H:%M").time()
             except (ValueError, TypeError):
                 return None
 
-        # For current lesson, we safely check today's lessons
         if self._lesson_type == "current":
             lessons = timetable.get(today_str, [])
             if not lessons or not isinstance(lessons, list):
@@ -153,7 +164,6 @@ class CCLessonSensor(CoordinatorEntity, SensorEntity):
                     return lesson
             return None
 
-        # For next lesson, scan today's remaining lessons or look ahead to future school days
         sorted_dates = sorted([d for d in timetable.keys() if d >= today_str])
         
         for date_str in sorted_dates:
@@ -262,8 +272,10 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
                 "reason": item.get("reason"),
                 "points": item.get("score"),
                 "teacher": item.get("teacher_name"),
-                "date": item.get("timestamp")
-            } for item in activity_list[:5]
+                "date": item.get("timestamp"),
+                "lesson_name": item.get("lesson_name"),
+                "note": item.get("note"),
+            } for item in activity_list[:20]
         ]
 
         return {
@@ -279,6 +291,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     
     async_add_entities([
         CCHomeworkSensor(coordinator, entry, "Outstanding Homework", "this_week_outstanding_count"),
+        CCHomeworkSensor(coordinator, entry, "Total Outstanding Homework", "total_outstanding_count"),
         CCHomeworkSensor(coordinator, entry, "Homework Due", "this_week_due_count"),
         CCHomeworkSensor(coordinator, entry, "Completed Homework", "this_week_completed_count"),
         CCLessonSensor(coordinator, entry, "current"),

@@ -1,6 +1,6 @@
 # 🏫 Class Charts for Home Assistant 
 
-![Version](https://img.shields.io/badge/version-1.2.9.1-blue.svg)
+![Version](https://img.shields.io/badge/version-1.2.10-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Home_Assistant-blue.svg)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 
@@ -19,6 +19,7 @@ A modern, UI-configurable integration that brings your **Class Charts** school t
 - 👨‍🏫 **Lesson Monitoring**: Know exactly what lesson is on now and what's coming up next.
 - 🔄 **Adjustable Date Range**: Sync 1 to 30 days of lessons via the "Configure" menu.
 - ⚙️ **Set Update Interval**:  Configure the data synchronization rate.
+- 📅 **Total Outstanding Homework**: A dedicated Total Outstanding Homework sensor, All homework pending regardless of when it is due & bypassing the default "current week" boundary.
 ---
 
 ## 📦 Installation
@@ -92,6 +93,7 @@ A view of all homework assignments.
 | `sensor.class_charts_[student_name]_outstanding_homework` | Count of active homework. Includes a list in attributes. |
 | `sensor.class_charts_[student_name]_homework_due` | Count of homework tasks due this week. |
 | `sensor.class_charts_[student_name]_completed_homework` | Total number of tasks marked as completed. |
+| `sensor.class_charts_alice_browne_total_outstanding_homework` | All uncompleted homework tasks (bypassing the default "current week" API boundary). |
 
 ###  Lesson Monitoring
 | Entity ID | Description |
@@ -147,6 +149,27 @@ Due: {{ item.due_date_formatted }}
 ✅ All caught up for the next 7 days!
   {% endif %}
 {% endif %}
+```
+
+## 🎨 Custom Markdown Card (Listing All Unticked Tasks)
+Because the integration now maps granular ticked and completed fields and extends the list size, you can build a comprehensive markdown card to list upcoming homework:
+```jinja2
+## 📚 Total Outstanding Homework
+{% set hw_list = state_attr('sensor.class_charts_alice_browne_outstanding_homework', 'homework_list') or [] -%}
+{% set outstanding = hw_list | selectattr('ticked', 'eq', 'no') | list -%}
+
+{% if outstanding | count > 0 -%}
+{% for item in outstanding -%}
+{% set subject_name = item.subject if item and item.subject and item.subject != 'None' else 'General' -%}
+- **{{ subject_name }}**: {{ item.title }}  
+  _(Due: {{ item.due_date_formatted }})_
+{% if not loop.last %}
+---
+{% endif %}
+{%- endfor %}
+{% else -%}
+🎉 All homework is completed!
+{%- endif %}
 ```
 ---
 ## ⚖️ Disclaimer
