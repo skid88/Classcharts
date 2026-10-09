@@ -45,7 +45,7 @@ class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
         raw_list = hw.get("data", [])
 
         cleaned_list = []
-        for item in raw_list[:15]:
+        for item in raw_list[:40]:
             raw_desc = item.get("description", "") or ""
             clean_text = re.sub('<[^<]+?>', '', raw_desc)
             clean_text = unescape(clean_text).strip()
