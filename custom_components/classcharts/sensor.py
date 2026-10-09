@@ -70,26 +70,25 @@ class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
             due_iso, due_disp = format_date(raw_due)
             issue_iso, issue_disp = format_date(raw_issue)
 
-           
-        status_obj = item.get("status") or {}
-        ticked_val = status_obj.get("ticked", "no")
+            status_obj = item.get("status") or {}
+            ticked_val = status_obj.get("ticked", "no")
 
-        cleaned_list.append({
-            "id": item.get("id"),
-            "subject": item.get("subject"),
-            "title": item.get("title"),
-            "teacher": item.get("teacher"),
-            "homework_type": item.get("homework_type"),
-            "issue_date": issue_iso,
-            "issue_date_formatted": issue_disp,
-            "due_date": due_iso,           
-            "due_date_formatted": due_disp,     
-            "description_snippet": description_snippet,
-            "ticked": ticked_val,
-            "completed": ticked_val == "yes",
-        })
+            cleaned_list.append({
+                "id": item.get("id"),
+                "subject": item.get("subject"),
+                "title": item.get("title"),
+                "teacher": item.get("teacher"),
+                "homework_type": item.get("homework_type"),
+                "issue_date": issue_iso,
+                "issue_date_formatted": issue_disp,
+                "due_date": due_iso,           
+                "due_date_formatted": due_disp,     
+                "description_snippet": description_snippet,
+                "ticked": ticked_val,
+                "completed": ticked_val == "yes",
+            })
 
-    return {"homework_list": cleaned_list}
+        return {"homework_list": cleaned_list}
 
 class CCLessonSensor(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
