@@ -112,7 +112,7 @@ A view of all homework assignments.
 #### State Attributes
 All behavior sensors expose the following diagnostic and historical data in their state attributes:
 
-* **`recent_activity`** *(list)*: A collection of the 5 most recent behavior incidents or praise logs.
+* **`recent_activity`** *(list)*: A collection of the 10 most recent behavior incidents or praise logs.
 ---
 
 ![Screenshot](https://github.com/skid88/Classcharts/blob/bc432526bc83bd0f049296d1b53e79a021403b4a/Timetable.png)
