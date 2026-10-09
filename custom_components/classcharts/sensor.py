@@ -263,7 +263,9 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
                 "reason": item.get("reason"),
                 "points": item.get("score"),
                 "teacher": item.get("teacher_name"),
-                "date": item.get("timestamp")
+                "date": item.get("timestamp"),
+                "lesson_name": item.get("lesson_name"),
+                "note": item.get("note"),
             } for item in activity_list[:5]
         ]
 
