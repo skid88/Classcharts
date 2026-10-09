@@ -70,21 +70,26 @@ class CCHomeworkSensor(CoordinatorEntity, SensorEntity):
             due_iso, due_disp = format_date(raw_due)
             issue_iso, issue_disp = format_date(raw_issue)
 
-            cleaned_list.append({
-                "id": item.get("id"),
-                "subject": item.get("subject"),
-                "title": item.get("title"),
-                "teacher": item.get("teacher"),
-                "homework_type": item.get("homework_type"),
-                "issue_date": issue_iso,
-                "issue_date_formatted": issue_disp,
-                "due_date": due_iso,           # YYYY-MM-DD for your Jinja math
-                "due_date_formatted": due_disp,     # DD/MM/YYYY for display
-                "description_snippet": description_snippet,
-            })
+           
+        status_obj = item.get("status") or {}
+        ticked_val = status_obj.get("ticked", "no")
 
-        return {"homework_list": cleaned_list}
+        cleaned_list.append({
+            "id": item.get("id"),
+            "subject": item.get("subject"),
+            "title": item.get("title"),
+            "teacher": item.get("teacher"),
+            "homework_type": item.get("homework_type"),
+            "issue_date": issue_iso,
+            "issue_date_formatted": issue_disp,
+            "due_date": due_iso,           
+            "due_date_formatted": due_disp,     
+            "description_snippet": description_snippet,
+            "ticked": ticked_val,
+            "completed": ticked_val == "yes",
+        })
 
+    return {"homework_list": cleaned_list}
 
 class CCLessonSensor(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
@@ -120,23 +125,20 @@ class CCLessonSensor(CoordinatorEntity, SensorEntity):
                 return None
             val_str = str(time_val)
             
-            # If it's an ISO timestamp containing 'T' (e.g. 2026-09-21T09:00:00)
             if "T" in val_str:
                 try:
                     return datetime.fromisoformat(val_str).time()
                 except ValueError:
                     pass
-            
-            # If it's just a time string, clean it up and grab HH:MM
+                  
             try:
-                # Remove any leading date if it's glued with a space
+                
                 if " " in val_str:
                     val_str = val_str.split(" ")[-1]
                 return datetime.strptime(val_str[:5], "%H:%M").time()
             except (ValueError, TypeError):
                 return None
 
-        # For current lesson, we safely check today's lessons
         if self._lesson_type == "current":
             lessons = timetable.get(today_str, [])
             if not lessons or not isinstance(lessons, list):
@@ -153,7 +155,6 @@ class CCLessonSensor(CoordinatorEntity, SensorEntity):
                     return lesson
             return None
 
-        # For next lesson, scan today's remaining lessons or look ahead to future school days
         sorted_dates = sorted([d for d in timetable.keys() if d >= today_str])
         
         for date_str in sorted_dates:
