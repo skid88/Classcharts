@@ -250,7 +250,7 @@ class CCBehaviourSensor(CoordinatorEntity, SensorEntity):
         total_neg = sum(item.get("negative", 0) for item in timeline)
         
         if self._sensor_type == "balance":
-            return (total_pos - total_neg)
+            return (total_pos - abs(total_neg))
         elif self._sensor_type == "positive":
             return total_pos
         elif self._sensor_type == "negative":
