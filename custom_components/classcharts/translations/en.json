@@ -15,12 +15,31 @@
         "data": {
           "student_selection": "Select Child"
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Class Charts",
+        "description": "Your Class Charts sign-in for {email} is no longer valid (for example, the password was changed). Enter the current password to reconnect.",
+        "data": {
+          "password": "Password"
+        }
+      },
+      "reconfigure": {
+        "title": "Update Class Charts Login",
+        "description": "Change the email and/or password used for this child. The pupil selection stays the same.",
+        "data": {
+          "email": "Email Address",
+          "password": "Password"
+        }
       }
     },
     "error": {
       "invalid_auth": "Invalid Credentials. Please check your email and password.",
       "cannot_connect": "Failed to connect to Class Charts. Please check internet connection.",
       "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "reauth_successful": "Class Charts was re-authenticated successfully.",
+      "reconfigure_successful": "Class Charts login was updated successfully."
     }
   },
   "options": {
