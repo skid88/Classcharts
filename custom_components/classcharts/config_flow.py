@@ -31,6 +31,7 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Initialize the multi-step memory structures."""
         self.login_data = {}
         self.discovered_students = {}
+        self._reauth_email = ""
 
     async def async_step_user(self, user_input=None):
         """Step 1: Capture credentials using your exact imported constants."""
@@ -38,7 +39,7 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             students = await self._discover_students(
-                user_input[CONF_EMAIL], 
+                user_input[CONF_EMAIL],
                 user_input[CONF_PASSWORD]
             )
 
@@ -48,7 +49,7 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "email": user_input[CONF_EMAIL],
                     "password": user_input[CONF_PASSWORD]
                 }
-                
+
                 return await self.async_step_select_student()
             else:
                 errors["base"] = "invalid_auth"
@@ -78,7 +79,7 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }
 
             return self.async_create_entry(
-                title=f"Class Charts ({student_name})", 
+                title=f"Class Charts ({student_name})",
                 data=final_data
             )
 
@@ -90,9 +91,68 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_reauth(self, entry_data):
+        """Entry point when Home Assistant detects the credentials stopped working."""
+        self._reauth_email = entry_data.get(CONF_EMAIL, "")
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(self, user_input=None):
+        """Prompt for the new password and update the existing entry in place."""
+        errors = {}
+
+        if user_input is not None:
+            students = await self._discover_students(
+                self._reauth_email, user_input[CONF_PASSWORD]
+            )
+            if students:
+                entry = self._get_reauth_entry()
+                self.hass.config_entries.async_update_entry(
+                    entry,
+                    data={**entry.data, CONF_PASSWORD: user_input[CONF_PASSWORD]},
+                )
+                await self.hass.config_entries.async_reload(entry.entry_id)
+                return self.async_abort(reason="reauth_successful")
+            errors["base"] = "invalid_auth"
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({vol.Required(CONF_PASSWORD): str}),
+            description_placeholders={"email": self._reauth_email},
+            errors=errors,
+        )
+
+    async def async_step_reconfigure(self, user_input=None):
+        """Let the user change the email/password proactively from Settings."""
+        errors = {}
+        entry = self._get_reconfigure_entry()
+
+        if user_input is not None:
+            students = await self._discover_students(
+                user_input[CONF_EMAIL], user_input[CONF_PASSWORD]
+            )
+            if students:
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data={
+                        **entry.data,
+                        CONF_EMAIL: user_input[CONF_EMAIL],
+                        CONF_PASSWORD: user_input[CONF_PASSWORD],
+                    },
+                )
+            errors["base"] = "invalid_auth"
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema({
+                vol.Required(CONF_EMAIL, default=entry.data.get(CONF_EMAIL, "")): str,
+                vol.Required(CONF_PASSWORD): str,
+            }),
+            errors=errors,
+        )
+
     async def _discover_students(self, email, password):
         """Authenticate, extract dynamic V2 credentials, and scan for pupil mappings."""
-        
+
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -115,12 +175,12 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         try:
             async with asyncio.timeout(10):
                 async with aiohttp.ClientSession() as session:
-                    
+
                     # Submit credentials form handshake
                     async with session.post(
-                        NEW_LOGIN_URL, 
-                        data=encoded_payload, 
-                        headers=headers, 
+                        NEW_LOGIN_URL,
+                        data=encoded_payload,
+                        headers=headers,
                         allow_redirects=True
                     ) as response:
                         _LOGGER.info("Login handshake settled with status: %s", response.status)
@@ -128,7 +188,7 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     # Extract session validation token
                     session_id_token = None
                     cookies = session.cookie_jar.filter_cookies("https://www.classcharts.com")
-                    
+
                     if "parent_session_credentials" in cookies:
                         raw_cookie_val = cookies["parent_session_credentials"].value
                         unquoted_cookie = urllib.parse.unquote(raw_cookie_val)
@@ -137,7 +197,7 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             session_id_token = cookie_json.get("session_id")
                         except Exception:
                             pass
-                    
+
                     if not session_id_token and "cc-session" in cookies:
                         session_id_token = cookies["cc-session"].value
 
@@ -155,7 +215,7 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         "Referer": "https://www.classcharts.com/mobile/parent",
                         "User-Agent": headers["User-Agent"]
                     }
-                    
+
                     found_kids = {}
 
                     # Route 1: Updated V2 parent ping route
@@ -163,16 +223,16 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     async with session.post(v2_ping_url, data="{}", headers=api_headers) as api_response:
                         if api_response.status == 200:
                             json_data = await api_response.json()
-                            
+
                             # Safely parse data node whether it's a dict or a list
                             data_node = json_data.get("data", {})
                             pupils_list = []
-                            
+
                             if isinstance(data_node, dict):
                                 pupils_list = data_node.get("pupils", [])
                             elif isinstance(data_node, list):
                                 pupils_list = data_node
-                                
+
                             if not pupils_list:
                                 pupils_list = json_data.get("pupils", [])
 
@@ -191,10 +251,10 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         async with session.post(v2_pupils_url, data="{}", headers=api_headers) as pupils_response:
                             if pupils_response.status == 200:
                                 json_data = await pupils_response.json()
-                                
+
                                 _LOGGER.error("=== CLASS CHARTS V2 PUPILS SUCCESS ===")
                                 _LOGGER.error(json.dumps(json_data))
-                                
+
                                 data_node = json_data.get("data", [])
                                 pupils_list = data_node if isinstance(data_node, list) else json_data.get("pupils", [])
                                 if not pupils_list and isinstance(json_data, list):
@@ -211,10 +271,10 @@ class ClassChartsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     if found_kids:
                         _LOGGER.info("Discovered Class Charts children successfully via V2: %s", found_kids)
                         return found_kids
-                    
+
                     _LOGGER.error("Authenticated successfully, but both V2 endpoints returned empty student profiles.")
                     return {}
-                            
+
         except Exception as err:
             _LOGGER.exception(f"Unexpected crash during child array discovery sequence: {err}")
             return {}
