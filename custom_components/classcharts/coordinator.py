@@ -7,10 +7,11 @@ import urllib.parse
 from datetime import timedelta
 
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
-    DOMAIN, 
+    DOMAIN,
     CONF_PUPIL_ID,
     CONF_DAYS_TO_FETCH,
     HOMEWORK_URL,
@@ -19,6 +20,15 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+
+class ClassChartsAuthError(Exception):
+    """Raised only when Class Charts rejects the stored credentials.
+
+    Kept distinct from UpdateFailed so a genuine bad/changed password triggers
+    Home Assistant's re-authentication prompt, while transient problems (server
+    outages, timeouts, bad responses) stay as UpdateFailed and simply retry.
+    """
+
 # Direct, authenticated V2 endpoints
 LOGIN_URL = "https://www.classcharts.com/parent/login"
 V2_BASE_URL = "https://www.classcharts.com/apiv2parent"
@@ -26,7 +36,7 @@ V2_BASE_URL = "https://www.classcharts.com/apiv2parent"
 def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
     """Fetch data using the verified V2 Cookie + Auth + Handshake loop."""
     session = requests.Session()
-    
+
     session.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
         "Accept": "application/json, text/javascript, */*; q=0.01",
@@ -34,7 +44,7 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         "Origin": "https://www.classcharts.com",
         "Referer": "https://www.classcharts.com/",
     })
-    
+
     try:
         session.headers.update({"Content-Type": "application/x-www-form-urlencoded"})
         login_payload = {
@@ -45,9 +55,9 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
             "recaptcha-token": "no-token-available"
         }
         encoded_login = urllib.parse.urlencode(login_payload)
-        
+
         login_resp = session.post(
-            LOGIN_URL, 
+            LOGIN_URL,
             data=encoded_login,
             allow_redirects=True,
             timeout=15
@@ -56,7 +66,7 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         # 2. Extract Authenticated V2 Token from Session Cookies
         cookies_dict = session.cookies.get_dict()
         session_token = None
-        
+
         raw_cookie_data = cookies_dict.get("parent_session_credentials")
         if raw_cookie_data:
             try:
@@ -65,13 +75,17 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
                 session_token = cookie_json.get("session_id")
             except Exception:
                 pass
-                
+
         # Safe fallback back into the direct cc-session key
         if not session_token:
             session_token = cookies_dict.get("cc-session")
-            
+
         if not session_token:
-            raise UpdateFailed("Failed to extract operational security token from handshake cookies.")
+            # A successful handshake with no session cookie is Class Charts'
+            # "bad credentials" response, so treat it as an auth failure. This
+            # lets Home Assistant raise a re-authentication prompt (e.g. after a
+            # password change) instead of silently retrying a dead login.
+            raise ClassChartsAuthError("Failed to authenticate with Class Charts.")
 
         # Update core global headers for the modern AJAX interface
         session.headers.update({
@@ -107,7 +121,7 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
                 params={"date": date_str},
                 timeout=10
             )
-            
+
             if resp.status_code == 200:
                 try:
                     day_data = resp.json()
@@ -121,13 +135,13 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
         # 5. Fetch Updated V2 Homework Data
         hw_from = (datetime.date.today() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         hw_to = (datetime.date.today() + datetime.timedelta(days=30)).strftime("%Y-%m-%d")
-        
+
         hw_resp = session.get(
             f"{HOMEWORK_URL}/{pupil_id}",
             params={"display_date": "due_date", "from": hw_from, "to": hw_to},
             timeout=10
         )
-        
+
         homework_data = {"data": [], "meta": {}}
         if hw_resp.status_code == 200:
             try:
@@ -174,6 +188,10 @@ def sync_get_classcharts_data(email, password, pupil_id, days_to_fetch):
             "activity_data": activity_data     # This is the detailed list JSON
         }
 
+    except ClassChartsAuthError:
+        # Surface credential failures unchanged so _async_update_data can turn
+        # them into a re-authentication prompt rather than a generic retry.
+        raise
     except Exception as err:
         _LOGGER.error("Error fetching Class Charts data payload: %s", err)
         raise UpdateFailed(f"Error communicating with V2 API: {err}")
@@ -187,11 +205,11 @@ class ClassChartsCoordinator(DataUpdateCoordinator):
     def __init__(self, hass: HomeAssistant, entry):
         """Initialize the coordinator class."""
         self.entry = entry
-        
+
         self.email = entry.data["email"]
         self.password = entry.data["password"]
         self.pupil_id = entry.data[CONF_PUPIL_ID]
-        
+
         # Default to 15 minutes if not set in options
         refresh_interval = entry.options.get("refresh_interval", 15)
         self.days_to_fetch = entry.options.get(CONF_DAYS_TO_FETCH, 14)
@@ -205,10 +223,16 @@ class ClassChartsCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         """Route the async coordinator request down to our sync fetch loop."""
-        return await self.hass.async_add_executor_job(
-            sync_get_classcharts_data,
-            self.email,
-            self.password,
-            self.pupil_id,
-            self.days_to_fetch
-        )
+        try:
+            return await self.hass.async_add_executor_job(
+                sync_get_classcharts_data,
+                self.email,
+                self.password,
+                self.pupil_id,
+                self.days_to_fetch
+            )
+        except ClassChartsAuthError:
+            # Trigger Home Assistant's re-authentication flow.
+            raise ConfigEntryAuthFailed(
+                "Class Charts credentials are no longer valid."
+            ) from None
